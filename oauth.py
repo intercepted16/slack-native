@@ -1,11 +1,34 @@
-from flask import Flask, redirect, request, session, jsonify
+from flask import Flask, redirect, request, session, jsonify, Request
 import os
 from dotenv import load_dotenv
 from slack_sdk import WebClient
 from slack_sdk.web import SlackResponse
 from slack_sdk.errors import SlackApiError
-
+import time
+import hashlib
+import hmac
 load_dotenv(".env")
+messages = []
+
+
+def handle_challenge(request: Request):
+    request_json = request.json
+    if request_json["challenge"] is not None:
+        body = request.get_data()
+        timestamp = request.headers['X-Slack-Request-Timestamp']
+        if abs(time.time() - float(timestamp)) > 60 * 5:
+            # The request timestamp is more than five minutes from local time.
+            # It could be a replay attack, so let's ignore it.
+            return
+        sig_basestring = 'v0:' + timestamp + ':' + body.decode('utf-8')
+        signature = 'v0=' + hmac.new(os.environ.get("SLACK_SIGNING_SECRET").encode('utf-8'),
+                                sig_basestring.encode('utf-8'),
+                                digestmod=hashlib.sha256).hexdigest()
+        slack_signature = request.headers['X-Slack-Signature']
+        print("sig",signature)
+        print(slack_signature)
+        if hmac.compare_digest(signature, slack_signature):
+            return jsonify({"challenge": request.json["challenge"]})
 
 app = Flask(__name__)
 secret_key = os.environ.get("FLASK_SECRET_KEY")
@@ -143,6 +166,20 @@ def list_messages():
         return jsonify({"ok": response["ok"], "messages": messages})
     except SlackApiError as e:
         return jsonify({"ok": False, "error": e.response['error']}), 400
+    
+@app.route("/events/listen", methods=["POST"])
+def listen():
+    request_json = request.json
+    if "challenge" in request_json:
+        return handle_challenge(request)
+    elif "event" in request_json:
+        event = request_json["event"]
+        if event["type"] == "message":
+            # new message received, update the UI
+            messages.append(event.get("text"))
+            print(messages)
 
+    return "Request received."
+    
 if __name__ == '__main__':
     app.run(debug=True)
