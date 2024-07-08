@@ -38,7 +38,7 @@ else:
     app.secret_key = secret_key
 
 if bool(os.environ.get("DEV")) is True:
-        redirect_uri = "https://moved-bluebird-nice.ngrok-free.app/auth/callback"
+        redirect_uri = os.environ.get("DEV_SLACK_REDIRECT_URI")
 else:
         # TODO: insert production redirect URI
         redirect_uri = ""
@@ -48,7 +48,7 @@ def install():
     client_id = os.environ.get("SLACK_CLIENT_ID")
     scopes = "channels:read,chat:write,channels:history,groups:history,im:history,mpim:history"
     if bool(os.environ.get("DEV")) is True:
-        redirect_uri = "https://moved-bluebird-nice.ngrok-free.app/auth/callback"
+        redirect_uri = os.environ.get("DEV_SLACK_REDIRECT_URI")
     else:
         # TODO: insert production redirect URI
         redirect_uri = ""
