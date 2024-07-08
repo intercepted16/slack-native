@@ -3,8 +3,18 @@ from PyQt6.QtGui import QPalette, QColor, QIcon, QFont
 from PyQt6.QtCore import Qt
 import sys
 from PyQt6.QtWidgets import QWidget
-from PyQt6.QtWidgets import QHBoxLayout, QStackedWidget
+from PyQt6.QtWidgets import QHBoxLayout, QStackedWidget, QSizePolicy, QSpacerItem
 
+
+def create_messages_page():
+    page = QWidget()
+    layout = QVBoxLayout(page)
+    label = QLabel("Messages Page")
+    label.setFont(QFont("Arial", 20))
+    label.setAlignment(Qt.AlignmentFlag.AlignHCenter)  # Horizontally centered
+    layout.addWidget(label)
+    layout.addItem(QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))  # Add spacer
+    return page
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -28,9 +38,9 @@ class MainWindow(QMainWindow):
         # TODO: add actual pages instead of QLabel placeholders
         self.buttons = [
             (QPushButton("Home"), QLabel("Home Page")),
-            (QPushButton("Messages"), QLabel("Messages Page")),
+            (QPushButton("Messages"), create_messages_page()),
             (QPushButton("Profile"), QLabel("Profile Page")),
-            (QPushButton("Settings"), QLabel("Settings Page")),
+            (QPushButton ("Settings"), QLabel("Settings Page")),
         ]
 
         # Add pages to the contentStack and buttons to the sidebar
