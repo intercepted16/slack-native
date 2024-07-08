@@ -1,1 +1,4 @@
 pyqt6
+slack_sdk
+flask
+python-dotenv
