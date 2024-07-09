@@ -20,8 +20,9 @@ messages = []
 def create_messages_page(channels: List[object] | None = None):
     if not channels:
         try:
-            response = slack_client.conversations_list()
+            response = slack_client.users_conversations()
             channels = response.get("channels")
+            channels.sort(key=lambda x: x["name"])
         except SlackApiError as e:
             print(e.response['error'])
             # TODO: Make a global handler that shows the error message in the UI
