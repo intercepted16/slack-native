@@ -7,7 +7,7 @@ from slack_sdk.errors import SlackApiError
 import time
 import hashlib
 import hmac
-from shared import MessagesManager
+from common import MessagesManager
 load_dotenv(".env")
 messages = []
 app = Flask(__name__)
@@ -202,6 +202,21 @@ def listen():
             global_instance.messages_manager.messages_updated.emit(messages)
 
     return "Request received."
+
+
+@app.route("/channels/list")
+def list_channels():
+    token = session.get('access_token')
+    if not token:
+        return "Access token is missing. Please authorize first.", 401
+    
+    client = WebClient(token=token)
+    try:
+        response = client.conversations_list()
+        channels = response.get("channels")
+        return jsonify({"ok": response["ok"], "channels": channels})
+    except SlackApiError as e:
+        return jsonify({"ok": False, "error": e.response['error']}), 400
 
 @app.route("/test-update")
 def test_update():
