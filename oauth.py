@@ -7,8 +7,41 @@ from slack_sdk.errors import SlackApiError
 import time
 import hashlib
 import hmac
+from shared import MessagesManager
 load_dotenv(".env")
 messages = []
+app = Flask(__name__)
+secret_key = os.environ.get("FLASK_SECRET_KEY")
+if secret_key is None:
+    raise Exception("FLASK_SECRET_KEY must be set in the environment.")
+else:
+    app.secret_key = secret_key
+
+if bool(os.environ.get("DEV")) is True:
+    redirect_uri = os.environ.get("DEV_SLACK_REDIRECT_URI")
+else:
+    # TODO: insert production redirect URI
+    redirect_uri = ""
+
+
+class Global:
+            _instance = None
+
+            def __new__(cls):
+                if cls._instance is None:
+                    cls._instance = super(Global, cls).__new__(cls)
+                    # Initialize your global variable here
+                    cls._instance.messages_manager = None
+                return cls._instance
+            
+global_instance = Global()
+
+def main(messages_manager: MessagesManager):
+    print("Flask app started.")
+    global_instance.messages_manager = messages_manager
+    print("g", global_instance.messages_manager)
+    print(messages_manager)
+    app.run(debug=True, use_reloader=False)
 
 
 def handle_challenge(request: Request):
@@ -30,18 +63,6 @@ def handle_challenge(request: Request):
         if hmac.compare_digest(signature, slack_signature):
             return jsonify({"challenge": request.json["challenge"]})
 
-app = Flask(__name__)
-secret_key = os.environ.get("FLASK_SECRET_KEY")
-if secret_key is None:
-    raise Exception("FLASK_SECRET_KEY must be set in the environment.")
-else:
-    app.secret_key = secret_key
-
-if bool(os.environ.get("DEV")) is True:
-        redirect_uri = os.environ.get("DEV_SLACK_REDIRECT_URI")
-else:
-        # TODO: insert production redirect URI
-        redirect_uri = ""
 
 @app.route('/install')
 def install():
@@ -178,8 +199,11 @@ def listen():
             # new message received, update the UI
             messages.append(event.get("text"))
             print(messages)
+            global_instance.messages_manager.messages_updated.emit(messages)
 
     return "Request received."
-    
-if __name__ == '__main__':
-    app.run(debug=True)
+
+@app.route("/test-update")
+def test_update():
+    global_instance.messages_manager.messages_updated.emit(["Test message.", "booo!"])
+    return "Test update successful."
