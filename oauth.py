@@ -8,10 +8,14 @@ import time
 import hashlib
 import hmac
 from common import MessagesManager
+import keyring
 load_dotenv(".env")
 messages = []
 app = Flask(__name__)
 secret_key = os.environ.get("FLASK_SECRET_KEY")
+
+
+
 if secret_key is None:
     raise Exception("FLASK_SECRET_KEY must be set in the environment.")
 else:
@@ -37,9 +41,7 @@ class Global:
 global_instance = Global()
 
 def main(messages_manager: MessagesManager):
-    print("Flask app started.")
     global_instance.messages_manager = messages_manager
-    print("g", global_instance.messages_manager)
     print(messages_manager)
     app.run(debug=True, use_reloader=False)
 
@@ -90,7 +92,8 @@ def auth_callback():
             )
                 print(response.get("authed_user").get("access_token"))
             # Store access token in session or a more persistent storage
-                session['access_token'] = response.get("authed_user").get("access_token")
+                access_token = response.get("authed_user").get("access_token")
+                keyring.set_password("slack_native", "access_token", access_token)
                 return "Authorization code received and access token stored."
         except SlackApiError as e:
             return f"Error: {e.response['error']}", 400
@@ -98,96 +101,6 @@ def auth_callback():
         return "No code provided by Slack.", 400
     
 
-# for development purposes, will be removed in production
-@app.route('/')
-def home():
-   access_token = session.get('access_token', 'No access token found. Please authorize the app.') 
-   return f"Access token: {access_token}"
-
-
-@app.route('/message/send')
-def send_message():
-    token = session.get('access_token')
-    if not token:
-        return "Access token is missing. Please authorize first.", 401
-    
-    client = WebClient(token=token)
-    channel_id = request.args.get('channel_id')
-    if not channel_id:
-        return "Channel ID parameter is missing.", 400
-    text = request.args.get('text')
-    if not text:
-        return "Text parameter is missing.", 400
-    
-    try:
-        response = client.chat_postMessage(channel=channel_id, text=text)
-        return jsonify({"ok": response["ok"], "message": "Message sent successfully"})
-    except SlackApiError as e:
-        return jsonify({"ok": False, "error": e.response['error']}), 400
-    
-@app.route("/message/delete")
-def delete_message():
-    token = session.get('access_token')
-    if not token:
-        return "Access token is missing. Please authorize first.", 401
-    
-    client = WebClient(token=token)
-    channel_id = request.args.get('channel_id')
-    if not channel_id:
-        return "Channel ID parameter is missing.", 400
-    ts = request.args.get('ts')
-    if not ts:
-        return "Timestamp parameter is missing.", 400
-    
-    try:
-        response = client.chat_delete(channel=channel_id, ts=ts, as_user=True)
-        return jsonify({"ok": response["ok"], "message": "Message deleted successfully"})
-    except SlackApiError as e:
-        return jsonify({"ok": False, "error": e.response['error']}), 400
-    
-@app.route("/message/update")
-def update_message():
-    token = session.get('access_token')
-    if not token:
-        return "Access token is missing. Please authorize first.", 401
-    
-    client = WebClient(token=token)
-    channel_id = request.args.get('channel_id')
-    if not channel_id:
-        return "Channel ID parameter is missing.", 400
-    ts = request.args.get('ts')
-    if not ts:
-        return "Timestamp parameter is missing.", 400
-    text = request.args.get('text')
-    if not text:
-        return "Text parameter is missing.", 400
-    
-    try:
-        response = client.chat_update(channel=channel_id, ts=ts, text=text)
-        return jsonify({"ok": response["ok"], "message": "Message updated successfully"})
-    except SlackApiError as e:
-        return jsonify({"ok": False, "error": e.response['error']}), 400
-
-@app.route("/message/list")
-def list_messages():
-    token = session.get('access_token')
-    if not token:
-        return "Access token is missing. Please authorize first.", 401
-    
-    client = WebClient(token=token)
-    channel_id = request.args.get('channel_id')
-    if not channel_id:
-        return "Channel ID parameter is missing.", 400
-    
-    limit = request.args.get('limit', None)
-    
-    try:
-        response = client.conversations_history(channel=channel_id, limit=limit)
-        messages = response.get("messages")
-        return jsonify({"ok": response["ok"], "messages": messages})
-    except SlackApiError as e:
-        return jsonify({"ok": False, "error": e.response['error']}), 400
-    
 @app.route("/events/listen", methods=["POST"])
 def listen():
     request_json = request.json
@@ -204,20 +117,7 @@ def listen():
     return "Request received."
 
 
-@app.route("/channels/list")
-def list_channels():
-    token = session.get('access_token')
-    if not token:
-        return "Access token is missing. Please authorize first.", 401
-    
-    client = WebClient(token=token)
-    try:
-        response = client.conversations_list()
-        channels = response.get("channels")
-        return jsonify({"ok": response["ok"], "channels": channels})
-    except SlackApiError as e:
-        return jsonify({"ok": False, "error": e.response['error']}), 400
-
+# Test route to update the messages, to be removed later
 @app.route("/test-update")
 def test_update():
     global_instance.messages_manager.messages_updated.emit(["Test message.", "booo!"])

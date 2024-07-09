@@ -4,13 +4,29 @@ from PyQt6.QtGui import QPalette, QColor, QIcon, QFont
 from PyQt6.QtCore import Qt
 import sys
 from PyQt6.QtWidgets import QWidget
-from PyQt6.QtWidgets import QHBoxLayout, QStackedWidget, QSizePolicy, QSpacerItem, QScrollArea
+from PyQt6.QtWidgets import QHBoxLayout, QStackedWidget, QScrollArea
 from common import MessagesManager
 from PyQt6.QtWidgets import QListWidget
-from common import list_channels
+from slack_sdk import WebClient
+from slack_sdk.errors import SlackApiError
+import keyring
+
+# Keyring is cross-platform, e.g: on Windows, it uses the Windows Credential Manager
+slack_token = keyring.get_password("slack_native", "access_token")
+slack_client = WebClient(slack_token)
 messages = []
 
-def create_messages_page(channels: List[str] = list_channels()):
+
+def create_messages_page(channels: List[object] | None = None):
+    if not channels:
+        try:
+            response = slack_client.conversations_list()
+            channels = response.get("channels")
+        except SlackApiError as e:
+            print(e.response['error'])
+            # TODO: Make a global handler that shows the error message in the UI
+            channels = []
+
     mainWidget = QWidget()  # Main widget that holds everything
     mainLayout = QHBoxLayout(mainWidget)  # Main layout to arrange widgets horizontally
     
@@ -32,7 +48,7 @@ def create_messages_page(channels: List[str] = list_channels()):
     # Channels list area
     channelsListWidget = QListWidget()
     for channel in channels:
-        channelsListWidget.addItem(channel)
+        channelsListWidget.addItem(channel["name"])
     
     # Adding both the scroll area and the channels list to the main layout
     mainLayout.addWidget(scrollWidget, 3)  # Messages area takes more space
