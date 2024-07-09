@@ -3,25 +3,44 @@ from PyQt6.QtWidgets import QApplication, QMainWindow, QStyleFactory, QLabel, QP
 from PyQt6.QtGui import QPalette, QColor, QIcon, QFont
 from PyQt6.QtCore import Qt
 import sys
-from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QWidget
-from PyQt6.QtWidgets import QHBoxLayout, QStackedWidget, QSizePolicy, QSpacerItem
-from shared import MessagesManager
+from PyQt6.QtWidgets import QHBoxLayout, QStackedWidget, QSizePolicy, QSpacerItem, QScrollArea
+from common import MessagesManager
+from PyQt6.QtWidgets import QListWidget
+from common import list_channels
 messages = []
 
-
-def create_messages_page():
-    messages_frame = QWidget()
-    layout = QVBoxLayout(messages_frame)
+def create_messages_page(channels: List[str] = list_channels()):
+    mainWidget = QWidget()  # Main widget that holds everything
+    mainLayout = QHBoxLayout(mainWidget)  # Main layout to arrange widgets horizontally
+    
+    # Messages area
+    messagesWidget = QWidget()
+    scrollWidget = QScrollArea()
+    scrollWidget.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+    scrollWidget.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    scrollWidget.setWidgetResizable(True)
+    scrollWidget.setWidget(messagesWidget)
+    
+    messagesLayout = QVBoxLayout(messagesWidget)
     label = QLabel("Messages Page")
     label.setFont(QFont("Arial", 20))
-    label.setAlignment(Qt.AlignmentFlag.AlignHCenter)  # Horizontally centered
-    layout.addWidget(label)
-    layout.addItem(QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.
-    Expanding))  # Add spacer
-    return messages_frame
-
+    label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+    messagesLayout.addWidget(label)
+    messagesWidget.setLayout(messagesLayout)
     
+    # Channels list area
+    channelsListWidget = QListWidget()
+    for channel in channels:
+        channelsListWidget.addItem(channel)
+    
+    # Adding both the scroll area and the channels list to the main layout
+    mainLayout.addWidget(scrollWidget, 3)  # Messages area takes more space
+    mainLayout.addWidget(channelsListWidget, 1)  # Channels list takes less space
+    
+    return mainWidget, messagesLayout  # Return the main widget that contains everything
+
+
 class MainWindow(QMainWindow):
     def __init__(self, messages_manager: MessagesManager):
         super().__init__()
@@ -44,11 +63,12 @@ class MainWindow(QMainWindow):
 
         # Define buttons and their corresponding pages
         messages_manager.messages_frame = create_messages_page()
+        print(messages_manager.messages_frame)
 
         # TODO: add actual pages instead of QLabel placeholders
         self.buttons = [
             (QPushButton("Home"), QLabel("Home Page")),
-            (QPushButton("Messages"), messages_manager.messages_frame),
+            (QPushButton("Messages"), messages_manager.messages_frame[0]),
             (QPushButton("Profile"), QLabel("Profile Page")),
             (QPushButton ("Settings"), QLabel("Settings Page")),
         ]
@@ -96,7 +116,7 @@ class MainWindow(QMainWindow):
         for message in messages:
             label = QLabel(message)
             label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.messages_manager.messages_frame.layout().addWidget(label) 
+            self.messages_manager.messages_frame[1].layout().addWidget(label) 
 
 def enable_dark_mode(app):
     app.setStyle(QStyleFactory.create("Fusion"))
