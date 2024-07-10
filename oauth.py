@@ -110,9 +110,9 @@ def listen():
         event = request_json["event"]
         if event["type"] == "message":
             # new message received, update the UI
-            messages.append(event.get("text"))
+            messages[event["channel"]].append(event["text"])
             print(messages)
-            global_instance.messages_manager.messages_updated.emit(messages)
+            global_instance.messages_manager.messages_updated.emit(event["channel"], messages[event["channel"]])
 
     return "Request received."
 
@@ -120,5 +120,7 @@ def listen():
 # Test route to update the messages, to be removed later
 @app.route("/test-update")
 def test_update():
+    # TODO: insert a real channel ID for testing
+    test_id = ""
     global_instance.messages_manager.messages_updated.emit(["Test message.", "booo!"])
     return "Test update successful."
