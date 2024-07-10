@@ -1,22 +1,29 @@
 from typing import List
-from PyQt6.QtWidgets import QApplication, QMainWindow, QStyleFactory, QLabel, QPushButton, QVBoxLayout  # Add QVBoxLayout import
+from PyQt6.QtWidgets import QApplication, QMainWindow, QStyleFactory, QLabel, QPushButton, \
+    QVBoxLayout  # Add QVBoxLayout import
 from PyQt6.QtGui import QPalette, QColor, QIcon, QFont
 from PyQt6.QtCore import Qt
 import sys
 from PyQt6.QtWidgets import QWidget
 from PyQt6.QtWidgets import QHBoxLayout, QStackedWidget, QScrollArea
 from PyQt6.QtWidgets import QListWidgetItem
+
+import parse
 from common import MessagesManager
 from PyQt6.QtWidgets import QListWidget
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 from PyQt6.QtGui import QResizeEvent
 import keyring
+from PyQt6.QtWidgets import QTextBrowser
+
 
 # Keyring is cross-platform, e.g: on Windows, it uses the Windows Credential Manager
 slack_token = keyring.get_password("slack_native", "access_token")
 slack_client = WebClient(slack_token)
 messages: List[object] = []
+
+
 def create_messages_page(messages_manager: MessagesManager, channels: List[object] | None = None):
     if not channels:
         try:
@@ -27,57 +34,56 @@ def create_messages_page(messages_manager: MessagesManager, channels: List[objec
             print(e.response['error'])
             channels = []
 
-    mainWidget = QWidget()  # Main widget that holds everything
-    mainLayout = QHBoxLayout(mainWidget)  # Main layout to arrange widgets horizontally
-    
+    main_widget = QWidget()  # Main widget that holds everything
+    main_layout = QHBoxLayout(main_widget)  # Main layout to arrange widgets horizontally
+
     # Dictionary to store scrollable widgets for each channel
     channel_messages_widgets = {}
 
     # Channels list area
-    channelsListWidget = QListWidget()
+    channels_list_widget = QListWidget()
     if channels:
         for channel in channels:
             item = QListWidgetItem(channel["name"])
             item.setData(Qt.ItemDataRole.UserRole, channel)
-            channelsListWidget.addItem(item)
+            channels_list_widget.addItem(item)
 
-            # Create a scrollable widget for each channel
-            messagesWidget = QWidget()
-            scrollWidget = QScrollArea()
-            scrollWidget.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-            scrollWidget.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-            scrollWidget.setWidgetResizable(True)
-            scrollWidget.setWidget(messagesWidget)
-            scrollWidget.setVisible(False)  # Initially hidden
+            # Create a text browser widget to display messages for each channel
+            scroll_widget = QTextBrowser()
+            scroll_widget.setOpenExternalLinks(True)
+            scroll_widget.setVisible(False)  # Initially hidden
 
-            messagesLayout = QVBoxLayout(messagesWidget)
+            messages_layout = QVBoxLayout(scroll_widget)
             label = QLabel(f"Messages for {channel['name']}")
             label.setFont(QFont("Arial", 20))
             label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-            messagesLayout.addWidget(label)
-            messagesWidget.setLayout(messagesLayout)
+            messages_layout.addWidget(label)
+            scroll_widget.setLayout(messages_layout)
 
             # Store the scrollable widget in the dictionary
-            channel_messages_widgets[channel["id"]] = scrollWidget
+            channel_messages_widgets[channel["id"]] = scroll_widget
 
     # Connect the itemPressed signal to a lambda that calls on_channel_selected and passes the channel_messages_widgets
-    channelsListWidget.itemPressed.connect(lambda item: on_channel_selected(item, messages_manager, channel_messages_widgets))
+    channels_list_widget.itemPressed.connect(
+        lambda item: on_channel_selected(item, messages_manager, channel_messages_widgets))
 
     # Add the first channel's messages widget to the layout, or handle the default case
     for channel_id, widget in channel_messages_widgets.items():
-        mainLayout.addWidget(widget, 3)
+        main_layout.addWidget(widget, 3)
         widget.setVisible(False)
 
     if channels:
         first_channel_id = channels[0]["id"]
         channel_messages_widgets[first_channel_id].setVisible(True)
 
-    mainLayout.addWidget(channelsListWidget, 1)  # Channels list takes less space
-    
-    return mainWidget, channel_messages_widgets  # Return the main widget and the dictionary of message widgets
+    main_layout.addWidget(channels_list_widget, 1)  # Channels list takes less space
+
+    return main_widget, channel_messages_widgets  # Return the main widget and the dictionary of message widgets
+
 
 class Global:
     last_selected_channel = None
+
 
 global_instance = Global()
 
@@ -104,14 +110,14 @@ def on_channel_selected(item: QListWidgetItem, messages_manager: MessagesManager
     try:
         response = slack_client.conversations_history(channel=channel["id"], limit=10)
         messages = response.get("messages")
-        messages = [message["text"] for message in messages]
+        messages = [parse.render_message(message["text"]) for message in messages if "text" in message]
         print(messages)
 
         # Assuming messages_manager has a method to update the UI with new messages
         messages_manager.messages_updated.emit(channel["id"], messages)
 
         # Update the UI of the selected channel's messages widget
-        messages_widget = channel_messages_widgets[channel["id"]].widget()
+        messages_widget = channel_messages_widgets[channel["id"]]
         layout = messages_widget.layout()
 
         # Clear existing messages
@@ -122,11 +128,12 @@ def on_channel_selected(item: QListWidgetItem, messages_manager: MessagesManager
 
         # Add new messages
         for message in messages:
-            label = QLabel(message)
-            layout.addWidget(label)
+            messages_widget.append(f"\n<p>{message}</p>")
+            layout.addWidget(messages_widget)
 
     except SlackApiError as e:
         print(e.response['error'])
+
 
 class MainWindow(QMainWindow):
     def __init__(self, messages_manager: MessagesManager):
@@ -140,7 +147,8 @@ class MainWindow(QMainWindow):
 
         # Central widget and main layout
         centralWidget = QWidget(self)
-        mainLayout = QHBoxLayout(centralWidget)  # Use QHBoxLayout for main layout to place sidebar and content side by side
+        mainLayout = QHBoxLayout(
+            centralWidget)  # Use QHBoxLayout for main layout to place sidebar and content side by side
 
         # Initialize sidebarLayout
         self.sidebarLayout = QVBoxLayout()
@@ -157,7 +165,7 @@ class MainWindow(QMainWindow):
             (QPushButton("Home"), QLabel("Home Page")),
             (QPushButton("Messages"), messages_manager.messages_frame[0]),
             (QPushButton("Profile"), QLabel("Profile Page")),
-            (QPushButton ("Settings"), QLabel("Settings Page")),
+            (QPushButton("Settings"), QLabel("Settings Page")),
         ]
 
         # Add pages to the contentStack and buttons to the sidebar
@@ -177,7 +185,6 @@ class MainWindow(QMainWindow):
 
         messages_manager.messages_updated.connect(self.update_messages_ui)
 
-
         # Add sidebarLayout and contentStack to the mainLayout
         sidebarContainer = QWidget()  # Container for the sidebar
         sidebarContainer.setLayout(self.sidebarLayout)
@@ -186,11 +193,12 @@ class MainWindow(QMainWindow):
 
         # Set centralWidget as the central widget of the main window
         self.setCentralWidget(centralWidget)
+
     def resizeEvent(self, event: QResizeEvent):
         super().resizeEvent(event)
-        self.adjustButtonFontSize()
+        self.adjust_button_font_size()
 
-    def adjustButtonFontSize(self):
+    def adjust_button_font_size(self):
         window_height = self.height()
         font_size = window_height // 40  # Change the divisor to adjust the scaling factor
 
@@ -198,9 +206,10 @@ class MainWindow(QMainWindow):
             font = button.font()
             font.setPointSize(font_size)
             button.setFont(font)
+
     def update_messages_ui(self, channel_id, messages):
         # Access the specific channel's messages widget based on channel_id
-        messages_widget = self.messages_manager.messages_frame[1][channel_id].widget()
+        messages_widget = self.messages_manager.messages_frame[1][channel_id]
         layout = messages_widget.layout()
 
         for channel in self.messages_manager.messages_frame[1]:
@@ -221,7 +230,6 @@ class MainWindow(QMainWindow):
             label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             layout.addWidget(label)
         self.messages_manager.messages_frame[1][channel_id].setVisible(True)
-    
 
 
 def enable_dark_mode(app):
@@ -235,6 +243,7 @@ def enable_dark_mode(app):
     dark_palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(255, 255, 255))
     dark_palette.setColor(QPalette.ColorRole.ToolTipText, QColor(255, 255, 255))
     app.setPalette(dark_palette)
+
 
 def main():
     messages_manager = MessagesManager()

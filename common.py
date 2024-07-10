@@ -1,5 +1,5 @@
 from PyQt6.QtCore import QObject, pyqtSignal
-from PyQt6.QtWidgets import QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QWidget
 
 
 class MessagesManager(QObject):
