@@ -1,9 +1,8 @@
+import os
 import re
-import keyring
-from slack_sdk import WebClient
-from slack_sdk.errors import SlackApiError
-import json
+import emoji_data_python
 import requests
+import glob
 
 # Slack formatting patterns
 bold_pattern = re.compile(r'\*(.*?)\*')
@@ -14,7 +13,19 @@ channel_pattern = re.compile(r'#(\w+)')
 emoji_pattern = re.compile(r':(\w+):')
 
 
+def path_to_emoji(emoji_name: str):
+    pattern = f"tmp/{emoji_name}.*"
+    files = glob.glob(pattern)
+    if len(files) > 0:
+        return files[0]
+    return None
+
+
 def fetch_emoji(emoji_name: str):
+    # check if the emoji is cached
+    emoji_path = path_to_emoji(emoji_name)
+    if emoji_path:
+        return emoji_path
     # TODO: dynamically create the URL with the ID of the workspace
     url = "https://edgeapi.slack.com/cache/T0266FRGM/emojis/info?fp=af&_x_num_retries=0"
 
@@ -42,7 +53,16 @@ def fetch_emoji(emoji_name: str):
     result = response.json()["results"]
     if len(result) > 0:
         print(result)
-        return result[0]["value"]
+        # download the file locally for caching & rendering
+        res = requests.get(result[0]["value"])
+        # if the folder does not exist, create it
+        if not os.path.exists("tmp"):
+            os.makedirs("tmp")
+
+        file_extension = result[0]["value"].split(".")[-1]
+        with open("tmp/" + emoji_name + file_extension, "wb") as file:
+            file.write(res.content)
+        return "tmp/" + emoji_name + ".png"
     else:
         return None
 
@@ -58,21 +78,9 @@ def render_message(text):
     text = link_pattern.sub(r'<a href="\1">\2</a>', text)
     # Replace channels
     text = channel_pattern.sub(r'<span class="channel">#\1</span>', text)
-    # Replace emojis with <img> elements
-    # TODO: cache the emojis to avoid fetching them every time
-    # BUG: `QTextBrowser` does not render `img` tags
-    text = emoji_pattern.sub(lambda match: f'<img src="{fetch_emoji(match.group(1))}" alt="{match.group(1)}">', text)
+    # render standard emojis
+    text = emoji_data_python.replace_colons(text, False)
+    # render custom emojis
+    text = emoji_pattern.sub(
+        lambda match: f'<img src="{fetch_emoji(match.group(1))}" alt="{match.group(1)}" width="20" height="20"', text)
     return text
-
-
-def cache_emojis(emojis, file_path='emoji_cache.json'):
-    with open(file_path, 'w') as file:
-        json.dump(emojis, file)
-
-
-def load_cached_emojis(file_path='emoji_cache.json'):
-    try:
-        with open(file_path, 'r') as file:
-            return json.load(file)
-    except FileNotFoundError:
-        return {}
