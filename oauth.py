@@ -9,12 +9,11 @@ import hashlib
 import hmac
 from common import MessagesManager
 import keyring
+
 load_dotenv(".env")
 messages = []
 app = Flask(__name__)
 secret_key = os.environ.get("FLASK_SECRET_KEY")
-
-
 
 if secret_key is None:
     raise Exception("FLASK_SECRET_KEY must be set in the environment.")
@@ -29,16 +28,18 @@ else:
 
 
 class Global:
-            _instance = None
+    _instance = None
 
-            def __new__(cls):
-                if cls._instance is None:
-                    cls._instance = super(Global, cls).__new__(cls)
-                    # Initialize your global variable here
-                    cls._instance.messages_manager = None
-                return cls._instance
-            
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(Global, cls).__new__(cls)
+            # Initialize your global variable here
+            cls._instance.messages_manager = None
+        return cls._instance
+
+
 global_instance = Global()
+
 
 def main(messages_manager: MessagesManager):
     global_instance.messages_manager = messages_manager
@@ -57,10 +58,10 @@ def handle_challenge(request: Request):
             return
         sig_basestring = 'v0:' + timestamp + ':' + body.decode('utf-8')
         signature = 'v0=' + hmac.new(os.environ.get("SLACK_SIGNING_SECRET").encode('utf-8'),
-                                sig_basestring.encode('utf-8'),
-                                digestmod=hashlib.sha256).hexdigest()
+                                     sig_basestring.encode('utf-8'),
+                                     digestmod=hashlib.sha256).hexdigest()
         slack_signature = request.headers['X-Slack-Signature']
-        print("sig",signature)
+        print("sig", signature)
         print(slack_signature)
         if hmac.compare_digest(signature, slack_signature):
             return jsonify({"challenge": request.json["challenge"]})
@@ -69,7 +70,7 @@ def handle_challenge(request: Request):
 @app.route('/install')
 def install():
     client_id = os.environ.get("SLACK_CLIENT_ID")
-    scopes = "channels:read,chat:write,channels:history,groups:history,im:history,mpim:history"
+    scopes = "channels:read,chat:write,channels:history,groups:history,im:history,mpim:history,emoji:read"
     if bool(os.environ.get("DEV")) is True:
         redirect_uri = os.environ.get("DEV_SLACK_REDIRECT_URI")
     else:
@@ -78,28 +79,29 @@ def install():
     slack_auth_url = f"https://slack.com/oauth/v2/authorize?client_id={client_id}&user_scope={scopes}&redirect_uri={redirect_uri}"
     return redirect(slack_auth_url)
 
+
 @app.route('/auth/callback')
 def auth_callback():
     code = request.args.get('code')
     if code:
         client = WebClient()
         try:
-                response: SlackResponse = client.oauth_v2_access(
+            response: SlackResponse = client.oauth_v2_access(
                 client_id=os.environ.get("SLACK_CLIENT_ID"),
                 client_secret=os.environ.get("SLACK_CLIENT_SECRET"),
                 code=code,
                 redirect_uri=redirect_uri
             )
-                print(response.get("authed_user").get("access_token"))
+            print(response.get("authed_user").get("access_token"))
             # Store access token in session or a more persistent storage
-                access_token = response.get("authed_user").get("access_token")
-                keyring.set_password("slack_native", "access_token", access_token)
-                return "Authorization code received and access token stored."
+            access_token = response.get("authed_user").get("access_token")
+            keyring.set_password("slack_native", "access_token", access_token)
+            return "Authorization code received and access token stored."
         except SlackApiError as e:
             return f"Error: {e.response['error']}", 400
     else:
         return "No code provided by Slack.", 400
-    
+
 
 @app.route("/events/listen", methods=["POST"])
 def listen():
