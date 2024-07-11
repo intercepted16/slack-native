@@ -1,21 +1,21 @@
 from typing import List
-from PyQt6.QtWidgets import QApplication, QMainWindow, QStyleFactory, QLabel, QPushButton, \
+from PySide6.QtWidgets import QApplication, QMainWindow, QStyleFactory, QLabel, QPushButton, \
     QVBoxLayout  # Add QVBoxLayout import
-from PyQt6.QtGui import QPalette, QColor, QIcon, QFont
-from PyQt6.QtCore import Qt
+from PySide6.QtGui import QPalette, QColor, QIcon, QFont
+from PySide6.QtCore import Qt
 import sys
-from PyQt6.QtWidgets import QWidget
-from PyQt6.QtWidgets import QHBoxLayout, QStackedWidget, QScrollArea
-from PyQt6.QtWidgets import QListWidgetItem
+from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import QHBoxLayout, QStackedWidget
+from PySide6.QtWidgets import QListWidgetItem
 
 import parse
 from common import MessagesManager
-from PyQt6.QtWidgets import QListWidget
+from PySide6.QtWidgets import QListWidget
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
-from PyQt6.QtGui import QResizeEvent
+from PySide6.QtGui import QResizeEvent
 import keyring
-from PyQt6.QtWidgets import QTextBrowser
+from PySide6.QtWidgets import QTextBrowser
 
 
 # Keyring is cross-platform, e.g: on Windows, it uses the Windows Credential Manager
@@ -146,9 +146,9 @@ class MainWindow(QMainWindow):
         self.setGeometry(100, 100, 800, 600)
 
         # Central widget and main layout
-        centralWidget = QWidget(self)
-        mainLayout = QHBoxLayout(
-            centralWidget)  # Use QHBoxLayout for main layout to place sidebar and content side by side
+        central_widget = QWidget(self)
+        main_layout = QHBoxLayout(
+            central_widget)  # Use QHBoxLayout for main layout to place sidebar and content side by side
 
         # Initialize sidebarLayout
         self.sidebarLayout = QVBoxLayout()
@@ -186,13 +186,13 @@ class MainWindow(QMainWindow):
         messages_manager.messages_updated.connect(self.update_messages_ui)
 
         # Add sidebarLayout and contentStack to the mainLayout
-        sidebarContainer = QWidget()  # Container for the sidebar
-        sidebarContainer.setLayout(self.sidebarLayout)
-        mainLayout.addWidget(sidebarContainer, 1)  # Add sidebar container to the main layout
-        mainLayout.addWidget(self.contentStack, 3)  # Add content stack to the main layout
+        sidebar_container = QWidget()  # Container for the sidebar
+        sidebar_container.setLayout(self.sidebarLayout)
+        main_layout.addWidget(sidebar_container, 1)  # Add sidebar container to the main layout
+        main_layout.addWidget(self.contentStack, 3)  # Add content stack to the main layout
 
         # Set centralWidget as the central widget of the main window
-        self.setCentralWidget(centralWidget)
+        self.setCentralWidget(central_widget)
 
     def resizeEvent(self, event: QResizeEvent):
         super().resizeEvent(event)

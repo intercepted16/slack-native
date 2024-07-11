@@ -1,4 +1,4 @@
-from flask import Flask, redirect, request, session, jsonify, Request
+from flask import Flask, redirect, request, jsonify, Request
 import os
 from dotenv import load_dotenv
 from slack_sdk import WebClient

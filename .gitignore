@@ -162,6 +162,5 @@ cython_debug/
 .idea/
 
 .env.local
-.env
 
 tmp/
