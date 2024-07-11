@@ -1,5 +1,7 @@
 import os
 import re
+from typing import List, Any
+from functools import lru_cache
 import emoji_data_python
 import requests
 import glob
@@ -21,11 +23,13 @@ def path_to_emoji(emoji_name: str):
     return None
 
 
-def fetch_emoji(emoji_name: str):
-    # check if the emoji is cached
-    emoji_path = path_to_emoji(emoji_name)
-    if emoji_path:
-        return emoji_path
+@lru_cache
+def fetch_emojis(emoji_names: tuple[str]) -> dict[str, str | Any] | None:
+    emoji_paths_to_fetch = []
+    for emoji_name in emoji_names:
+        emoji_path = path_to_emoji(emoji_name)
+        if emoji_path is None:
+            emoji_paths_to_fetch.append(emoji_name)
     # TODO: dynamically create the URL with the ID of the workspace
     url = "https://edgeapi.slack.com/cache/T0266FRGM/emojis/info?fp=af&_x_num_retries=0"
 
@@ -43,9 +47,7 @@ def fetch_emoji(emoji_name: str):
     # TODO: replace sample token with a valid token
     data = {
         "token": "xoxc-2210535565-7290482160290-7327065577730-16df343f7eeb21cd1964d263c717c20f16a3279b3f5bf14143a7c5cd25d89b85",
-        "updated_ids": {
-            f"{emoji_name}": 0,
-        }
+        "updated_ids": {path: 0 for path in emoji_paths_to_fetch}
     }
 
     response = requests.post(url, headers=headers, json=data)
@@ -53,16 +55,20 @@ def fetch_emoji(emoji_name: str):
     result = response.json()["results"]
     if len(result) > 0:
         print(result)
-        # download the file locally for caching & rendering
+        # download the files locally for caching & rendering
         res = requests.get(result[0]["value"])
         # if the folder does not exist, create it
         if not os.path.exists("tmp"):
             os.makedirs("tmp")
 
-        file_extension = result[0]["value"].split(".")[-1]
-        with open("tmp/" + emoji_name + file_extension, "wb") as file:
-            file.write(res.content)
-        return "tmp/" + emoji_name + ".png"
+        emoji_paths = {}
+
+        for i, emoji_name in enumerate(emoji_paths_to_fetch):
+            file_extension = result[i]["value"].split(".")[-1]
+            with open("tmp/" + emoji_name + "." + file_extension, "wb") as file:
+                file.write(res.content)
+                emoji_paths[emoji_name] = "tmp/" + emoji_name + "." + file_extension
+        return emoji_paths
     else:
         return None
 
@@ -81,6 +87,19 @@ def render_message(text):
     # render standard emojis
     text = emoji_data_python.replace_colons(text, False)
     # render custom emojis
-    text = emoji_pattern.sub(
-        lambda match: f'<img src="{fetch_emoji(match.group(1))}" alt="{match.group(1)}" width="20" height="20"', text)
+    # huge performance bottleneck; for each message; for each emoji, make a request to the slack Server
+    # for each emoji
+    emojis: tuple[str] = tuple(emoji_pattern.findall(text))
+    print(emojis)
+    fetch_emojis(emojis)
+    for emoji in emojis:
+        # for each emoji in the path of emojis
+        emoji_path = path_to_emoji(emoji)
+        if emoji_path is None:
+            text = emoji_pattern.sub(
+                lambda match: "", text
+            )
+            continue
+        text = emoji_pattern.sub(
+            lambda match: f'<img src="{emoji_path}" alt="{emoji}" width="20" height="20"', text)
     return text
