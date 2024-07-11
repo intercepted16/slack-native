@@ -1,5 +1,6 @@
 import os
 import re
+import time
 from typing import List, Any
 from functools import lru_cache
 import emoji_data_python
@@ -15,6 +16,7 @@ channel_pattern = re.compile(r'#(\w+)')
 emoji_pattern = re.compile(r':(\w+):')
 
 
+@lru_cache()
 def path_to_emoji(emoji_name: str):
     pattern = f"tmp/{emoji_name}.*"
     files = glob.glob(pattern)
@@ -30,6 +32,8 @@ def fetch_emojis(emoji_names: tuple[str]) -> dict[str, str | Any] | None:
         emoji_path = path_to_emoji(emoji_name)
         if emoji_path is None:
             emoji_paths_to_fetch.append(emoji_name)
+    if len(emoji_paths_to_fetch) == 0:
+        return {emoji_name: path_to_emoji(emoji_name) for emoji_name in emoji_names}
     # TODO: dynamically create the URL with the ID of the workspace
     url = "https://edgeapi.slack.com/cache/T0266FRGM/emojis/info?fp=af&_x_num_retries=0"
 
@@ -70,10 +74,13 @@ def fetch_emojis(emoji_names: tuple[str]) -> dict[str, str | Any] | None:
                 emoji_paths[emoji_name] = "tmp/" + emoji_name + "." + file_extension
         return emoji_paths
     else:
+        print("Error fetching emojis")
         return None
 
 
+@lru_cache()
 def render_message(text):
+    start = time.time()
     # Replace bold text
     text = bold_pattern.sub(r'<b>\1</b>', text)
     # Replace italic text
@@ -87,19 +94,16 @@ def render_message(text):
     # render standard emojis
     text = emoji_data_python.replace_colons(text, False)
     # render custom emojis
-    # huge performance bottleneck; for each message; for each emoji, make a request to the slack Server
-    # for each emoji
-    emojis: tuple[str] = tuple(emoji_pattern.findall(text))
-    print(emojis)
-    fetch_emojis(emojis)
-    for emoji in emojis:
-        # for each emoji in the path of emojis
-        emoji_path = path_to_emoji(emoji)
-        if emoji_path is None:
-            text = emoji_pattern.sub(
-                lambda match: "", text
-            )
-            continue
-        text = emoji_pattern.sub(
-            lambda match: f'<img src="{emoji_path}" alt="{emoji}" width="20" height="20"', text)
+    shorthands = emoji_pattern.findall(text)
+    shorthands_tuple = tuple(shorthands)
+    # type: ignore
+    emoji_urls = fetch_emojis(shorthands_tuple)
+
+    def replace_emoji(match):
+        return f'<img src="{emoji_urls.get(match.group(1))}" alt="{match.group(1)}" width="20" height="20">'
+
+    text = re.sub(emoji_pattern,
+                  replace_emoji, text)
+    end = time.time()
+    print(f"Rendering took {end - start} seconds")
     return text
