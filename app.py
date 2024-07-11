@@ -7,7 +7,6 @@ import sys
 from PySide6.QtWidgets import QWidget
 from PySide6.QtWidgets import QHBoxLayout, QStackedWidget
 from PySide6.QtWidgets import QListWidgetItem
-
 import parse
 from common import MessagesManager
 from PySide6.QtWidgets import QListWidget
@@ -17,14 +16,13 @@ from PySide6.QtGui import QResizeEvent
 import keyring
 from PySide6.QtWidgets import QTextBrowser
 
-
 # Keyring is cross-platform, e.g: on Windows, it uses the Windows Credential Manager
 slack_token = keyring.get_password("slack_native", "access_token")
 slack_client = WebClient(slack_token)
-messages: List[object] = []
+messages: List[dict] = []
 
 
-def create_messages_page(messages_manager: MessagesManager, channels: List[object] | None = None):
+def create_messages_page(messages_manager: MessagesManager, channels: List[dict] | None = None):
     if not channels:
         try:
             response = slack_client.users_conversations()
@@ -58,7 +56,7 @@ def create_messages_page(messages_manager: MessagesManager, channels: List[objec
             label.setFont(QFont("Arial", 20))
             label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
             messages_layout.addWidget(label)
-            scroll_widget.setLayout(messages_layout)
+            # scroll_widget.setLayout(messages_layout)
 
             # Store the scrollable widget in the dictionary
             channel_messages_widgets[channel["id"]] = scroll_widget
@@ -81,43 +79,43 @@ def create_messages_page(messages_manager: MessagesManager, channels: List[objec
     return main_widget, channel_messages_widgets  # Return the main widget and the dictionary of message widgets
 
 
-class Global:
-    last_selected_channel = None
+def show_channel(channel: dict, messages_manager: MessagesManager, messages_widgets: dict):
+    # Hide the previously selected channel's messages widget
+    if messages_manager.selected_channel in messages_widgets:
+        messages_widgets[messages_manager.selected_channel].setVisible(False)
+
+    # Reassign the selected channel
+    messages_manager.selected_channel = channel["id"]
+
+    # Show the selected channel's messages widget
+    if channel:
+        messages_widgets[channel["id"]].setVisible(True)
 
 
-global_instance = Global()
-
-
-def on_channel_selected(item: QListWidgetItem, messages_manager: MessagesManager, channel_messages_widgets: dict):
+def on_channel_selected(item: QListWidgetItem, messages_manager: MessagesManager, messages_widgets: dict):
     channel = item.data(Qt.ItemDataRole.UserRole)
     print(f"Channel selected: {channel['name']}")
 
-    if global_instance.last_selected_channel == channel["id"]:
+    if messages_manager.selected_channel == channel["id"]:
         print("Channel already selected")
         return
 
-    # Hide the previously selected channel's messages widget
-    if global_instance.last_selected_channel in channel_messages_widgets:
-        channel_messages_widgets[global_instance.last_selected_channel].setVisible(False)
-
-    global_instance.last_selected_channel = channel["id"]
-
-    # Show the selected channel's messages widget
-    if channel["id"] in channel_messages_widgets:
-        channel_messages_widgets[channel["id"]].setVisible(True)
+    show_channel(channel, messages_manager, messages_widgets)
 
     # Fetch the messages for the selected channel
     try:
         response = slack_client.conversations_history(channel=channel["id"], limit=10)
-        messages = response.get("messages")
-        messages = [parse.render_message(message["text"]) for message in messages if "text" in message]
-        print(messages)
+        channel_messages = response.get("messages")
+        # compile the messages into one before rendering
+        for message in channel_messages:
+            print(type(message["text"]))
+        channel_messages = [parse.render_message(message["text"]) for message in channel_messages if "text" in message]
 
         # Assuming messages_manager has a method to update the UI with new messages
-        messages_manager.messages_updated.emit(channel["id"], messages)
+        messages_manager.messages_updated.emit(channel["id"], channel_messages)
 
         # Update the UI of the selected channel's messages widget
-        messages_widget = channel_messages_widgets[channel["id"]]
+        messages_widget = messages_widgets[channel["id"]]
         layout = messages_widget.layout()
 
         # Clear existing messages
@@ -127,7 +125,7 @@ def on_channel_selected(item: QListWidgetItem, messages_manager: MessagesManager
                 child.widget().deleteLater()
 
         # Add new messages
-        for message in messages:
+        for message in channel_messages:
             messages_widget.append(f"\n<p>{message}</p>")
             layout.addWidget(messages_widget)
 
@@ -185,7 +183,6 @@ class MainWindow(QMainWindow):
 
         messages_manager.messages_updated.connect(self.update_messages_ui)
 
-        # Add sidebarLayout and contentStack to the mainLayout
         sidebar_container = QWidget()  # Container for the sidebar
         sidebar_container.setLayout(self.sidebarLayout)
         main_layout.addWidget(sidebar_container, 1)  # Add sidebar container to the main layout
@@ -207,16 +204,13 @@ class MainWindow(QMainWindow):
             font.setPointSize(font_size)
             button.setFont(font)
 
-    def update_messages_ui(self, channel_id, messages):
+    def update_messages_ui(self, channel_id):
         # Access the specific channel's messages widget based on channel_id
         messages_widget = self.messages_manager.messages_frame[1][channel_id]
         layout = messages_widget.layout()
 
-        for channel in self.messages_manager.messages_frame[1]:
-            print(channel)
-            print("us", channel_id)
-            if channel != channel_id:
-                self.messages_manager.messages_frame[1][channel].setVisible(False)
+        # Hide the currently visible channel's messages widget
+        self.messages_manager.messages_frame[1][self.messages_manager.selected_channel].setVisible(False)
 
         # Clear existing messages in the channel's widget before adding new ones
         while layout.count():

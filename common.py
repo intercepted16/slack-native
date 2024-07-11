@@ -6,3 +6,4 @@ class MessagesManager(QObject):
     # The signal contains the channel ID and a list of messages
     messages_updated = Signal(str, list)  # Signal carrying a list of messages
     messages_frame: tuple[QWidget, dict] | None = None
+    selected_channel: str | None = None
