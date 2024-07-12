@@ -1,20 +1,19 @@
 from typing import List
+
+import darkdetect
 from PySide6.QtWidgets import QApplication, QMainWindow, QStyleFactory, QLabel, QPushButton, \
     QVBoxLayout  # Add QVBoxLayout import
+from PySide6.QtCore import Signal
 from PySide6.QtGui import QPalette, QColor, QIcon, QFont
 from PySide6.QtCore import Qt
+from PySide6.QtCore import QThread
 import sys
 from PySide6.QtWidgets import QWidget
 from PySide6.QtWidgets import QHBoxLayout, QStackedWidget
-from PySide6.QtWidgets import QListWidgetItem
-import parse
 from common import MessagesManager
-from PySide6.QtWidgets import QListWidget
 from slack_sdk import WebClient
-from slack_sdk.errors import SlackApiError
 from PySide6.QtGui import QResizeEvent
 import keyring
-from PySide6.QtWidgets import QTextBrowser
 
 # Keyring is cross-platform, e.g: on Windows, it uses the Windows Credential Manager
 slack_token = keyring.get_password("slack_native", "access_token")
@@ -25,7 +24,6 @@ messages: List[dict] = []
 class MainWindow(QMainWindow):
     def __init__(self, messages_manager: MessagesManager):
         super().__init__()
-
         self.messages_manager = messages_manager
 
         self.setWindowTitle("Slack Native")
@@ -44,7 +42,7 @@ class MainWindow(QMainWindow):
         self.contentStack = QStackedWidget()
 
         # Define buttons and their corresponding pages
-        messages_manager.messages_frame = messages_manager.create_messages_page(channels=None)
+        messages_manager.create_page(channels=None)
         print("t", messages_manager.messages_frame[0])
 
         # TODO: add actual pages instead of QLabel placeholders
@@ -70,8 +68,6 @@ class MainWindow(QMainWindow):
         # Add a stretch to push the buttons to the top
         self.sidebarLayout.addStretch(1)
 
-        # messages_manager.messages_updated.connect(self.update_messages_ui)
-
         sidebar_container = QWidget()  # Container for the sidebar
         sidebar_container.setLayout(self.sidebarLayout)
         main_layout.addWidget(sidebar_container, 1)  # Add sidebar container to the main layout
@@ -93,36 +89,8 @@ class MainWindow(QMainWindow):
             font.setPointSize(font_size)
             button.setFont(font)
 
-    def update_messages_ui(self, channel):
-        channel_id = channel["id"]
-        # Access the specific channel's messages widget based on channel_id
-        messages_widget = self.messages_manager.messages_frame[1][channel_id]
-        layout = messages_widget.layout()
 
-        # Hide the currently visible channel's messages widget
-        self.messages_manager.messages_frame[1][self.messages_manager.selected_channel].setVisible(False)
-
-        show_channel(channel, self.messages_manager, self.messages_manager.messages_frame[1])
-
-        # Clear existing messages in the channel's widget before adding new ones
-        while layout.count():
-            child = layout.takeAt(0)
-            if child.widget():
-                child.widget().deleteLater()
-
-        # Add new messages to the specific channel's widget
-        print(f"Updating messages for channel {channel_id}")
-        self.messages_manager.messages_frame[1][channel_id].setVisible(True)
-        channel_messages = fetch_messages(channel_id)
-        # Add new messages
-        for message in channel_messages:
-            messages_widget.append(f"\n<p>{message}</p>")
-            layout.addWidget(messages_widget)
-
-
-def enable_dark_mode(app):
-    app.setStyle(QStyleFactory.create("Fusion"))
-
+class ThemeManager:
     dark_palette = QPalette()
     dark_palette.setColor(QPalette.ColorRole.Window, QColor(53, 53, 53))
     dark_palette.setColor(QPalette.ColorRole.WindowText, QColor(255, 255, 255))
@@ -130,12 +98,27 @@ def enable_dark_mode(app):
     dark_palette.setColor(QPalette.ColorRole.AlternateBase, QColor(53, 53, 53))
     dark_palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(255, 255, 255))
     dark_palette.setColor(QPalette.ColorRole.ToolTipText, QColor(255, 255, 255))
-    app.setPalette(dark_palette)
+
+    @staticmethod
+    def enable_dark(app):
+        app.setStyle(QStyleFactory.create("Fusion"))
+        app.setPalette(ThemeManager.dark_palette)
+
+    @staticmethod
+    def enable_light(app):
+        app.setStyle(QStyleFactory.create("Fusion"))
+
+    @staticmethod
+    def enable_system(app):
+        if darkdetect.isDark():
+            ThemeManager.enable_dark(app)
+        else:
+            ThemeManager.enable_light(app)
 
 
 def main():
     messages_manager = MessagesManager()
     app = QApplication(sys.argv)
-    enable_dark_mode(app)
     window = MainWindow(messages_manager)
+    ThemeManager.enable_system(app)
     return app, window, messages_manager

@@ -4,3 +4,4 @@ python-dotenv
 keyring
 requests
 PySide6
+darkdetect
