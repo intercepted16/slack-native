@@ -6,15 +6,10 @@ from PySide6.QtCore import Qt
 import sys
 from PySide6.QtWidgets import QWidget
 from PySide6.QtWidgets import QHBoxLayout, QStackedWidget
-from PySide6.QtWidgets import QListWidgetItem
-import parse
 from common import MessagesManager
-from PySide6.QtWidgets import QListWidget
 from slack_sdk import WebClient
-from slack_sdk.errors import SlackApiError
 from PySide6.QtGui import QResizeEvent
 import keyring
-from PySide6.QtWidgets import QTextBrowser
 
 # Keyring is cross-platform, e.g: on Windows, it uses the Windows Credential Manager
 slack_token = keyring.get_password("slack_native", "access_token")
@@ -44,7 +39,7 @@ class MainWindow(QMainWindow):
         self.contentStack = QStackedWidget()
 
         # Define buttons and their corresponding pages
-        messages_manager.messages_frame = messages_manager.create_messages_page(channels=None)
+        messages_manager.create_messages_page(channels=None)
         print("t", messages_manager.messages_frame[0])
 
         # TODO: add actual pages instead of QLabel placeholders
@@ -70,8 +65,6 @@ class MainWindow(QMainWindow):
         # Add a stretch to push the buttons to the top
         self.sidebarLayout.addStretch(1)
 
-        # messages_manager.messages_updated.connect(self.update_messages_ui)
-
         sidebar_container = QWidget()  # Container for the sidebar
         sidebar_container.setLayout(self.sidebarLayout)
         main_layout.addWidget(sidebar_container, 1)  # Add sidebar container to the main layout
@@ -92,32 +85,6 @@ class MainWindow(QMainWindow):
             font = button.font()
             font.setPointSize(font_size)
             button.setFont(font)
-
-    def update_messages_ui(self, channel):
-        channel_id = channel["id"]
-        # Access the specific channel's messages widget based on channel_id
-        messages_widget = self.messages_manager.messages_frame[1][channel_id]
-        layout = messages_widget.layout()
-
-        # Hide the currently visible channel's messages widget
-        self.messages_manager.messages_frame[1][self.messages_manager.selected_channel].setVisible(False)
-
-        show_channel(channel, self.messages_manager, self.messages_manager.messages_frame[1])
-
-        # Clear existing messages in the channel's widget before adding new ones
-        while layout.count():
-            child = layout.takeAt(0)
-            if child.widget():
-                child.widget().deleteLater()
-
-        # Add new messages to the specific channel's widget
-        print(f"Updating messages for channel {channel_id}")
-        self.messages_manager.messages_frame[1][channel_id].setVisible(True)
-        channel_messages = fetch_messages(channel_id)
-        # Add new messages
-        for message in channel_messages:
-            messages_widget.append(f"\n<p>{message}</p>")
-            layout.addWidget(messages_widget)
 
 
 def enable_dark_mode(app):
