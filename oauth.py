@@ -123,9 +123,10 @@ def listen():
 @app.route("/test-update")
 def test_update():
     channel_id = request.args.get("channel_id")
+    channel = {"id": channel_id}
     test_messages = request.args.get("messages")
     test_messages = test_messages.split(",")
     if channel_id is None or messages is None:
         return "Channel ID and messages are required.", 400
-    global_instance.messages_manager.messages_updated.emit(channel_id, test_messages)
+    global_instance.messages_manager.messages_updated.emit(channel, test_messages)
     return "Test update successful."
