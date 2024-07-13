@@ -3,10 +3,8 @@ from typing import List
 import darkdetect
 from PySide6.QtWidgets import QApplication, QMainWindow, QStyleFactory, QLabel, QPushButton, \
     QVBoxLayout  # Add QVBoxLayout import
-from PySide6.QtCore import Signal
 from PySide6.QtGui import QPalette, QColor, QIcon, QFont
 from PySide6.QtCore import Qt
-from PySide6.QtCore import QThread
 import sys
 from PySide6.QtWidgets import QWidget
 from PySide6.QtWidgets import QHBoxLayout, QStackedWidget
@@ -43,12 +41,12 @@ class MainWindow(QMainWindow):
 
         # Define buttons and their corresponding pages
         messages_manager.create_page(channels=None)
-        print("t", messages_manager.messages_frame[0])
+        print("t", messages_manager.messages_frame)
 
         # TODO: add actual pages instead of QLabel placeholders
         self.buttons = [
             (QPushButton("Home"), QLabel("Home Page")),
-            (QPushButton("Messages"), messages_manager.messages_frame[0]),
+            (QPushButton("Messages"), messages_manager.messages_frame),
             (QPushButton("Profile"), QLabel("Profile Page")),
             (QPushButton("Settings"), QLabel("Settings Page")),
         ]
@@ -117,7 +115,7 @@ class ThemeManager:
 
 
 def main():
-    messages_manager = MessagesManager()
+    messages_manager = MessagesManager(slack_client)
     app = QApplication(sys.argv)
     window = MainWindow(messages_manager)
     ThemeManager.enable_system(app)

@@ -5,31 +5,25 @@ from slack_sdk.web import WebClient
 from PySide6.QtGui import QFont
 from PySide6.QtCore import Qt
 from typing import List
-import keyring
-
 import parse
-
-slack_token = keyring.get_password("slack_native", "access_token")
-slack_client = WebClient(slack_token)
 
 
 class MessagesManager(QObject):
-    # The signal contains the channel ID and a list of messages
     messages_updated = Signal(dict, list)  # Signal carrying a list of messages
-    messages_frame: tuple[QWidget, dict] | None = None
-    selected_channel: str | None = None
+    messages_frame: QWidget = None
+    channel_widgets: dict = None
+    selected_channel: str = None
 
-    def __init__(self):
+    def __init__(self, slack_client: WebClient):
         super().__init__()
+        self.slack_client = slack_client
 
-    def create_messages_page(self, channels: List[dict] | None = None, ):
-        print("running")
+    def create_page(self, channels: List[dict] = None):
         if not channels:
             try:
-                response = slack_client.users_conversations()
+                response = self.slack_client.users_conversations()
                 channels = response.get("channels")
                 channels.sort(key=lambda x: x["name"])
-                print(channels)
             except SlackApiError as e:
                 print(e.response['error'])
                 channels = []
@@ -38,13 +32,12 @@ class MessagesManager(QObject):
         main_layout = QHBoxLayout(main_widget)  # Main layout to arrange widgets horizontally
 
         # Dictionary to store scrollable widgets for each channel
-        channel_messages_widgets = {}
+        channel_widgets = {}
 
         # Channels list area
         channels_list_widget = QListWidget()
         if channels:
             for channel in channels:
-                print("e", channel["name"])
                 item = QListWidgetItem(channel["name"])
                 item.setData(Qt.ItemDataRole.UserRole, channel)
                 channels_list_widget.addItem(item)
@@ -59,31 +52,30 @@ class MessagesManager(QObject):
                 label.setFont(QFont("Arial", 20))
                 label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
                 messages_layout.addWidget(label)
-                # scroll_widget.setLayout(messages_layout)
 
                 # Store the scrollable widget in the dictionary
-                channel_messages_widgets[channel["id"]] = scroll_widget
+                channel_widgets[channel["id"]] = scroll_widget
 
         # Connect the itemPressed signal to a lambda that calls on_channel_selected and passes the
         # channel_messages_widgets
         channels_list_widget.itemPressed.connect(
-            lambda item: self.on_channel_selected(item))
+            lambda selected_channel: self.on_channel_selected(selected_channel))
 
         # Add the first channel's messages widget to the layout, or handle the default case
-        for channel_id, widget in channel_messages_widgets.items():
+        for channel_id, widget in channel_widgets.items():
             main_layout.addWidget(widget, 3)
             widget.setVisible(False)
 
         if channels:
             first_channel_id = channels[0]["id"]
-            channel_messages_widgets[first_channel_id].setVisible(True)
+            channel_widgets[first_channel_id].setVisible(True)
 
         main_layout.addWidget(channels_list_widget, 1)  # Channels list takes less space
 
-        print(main_widget, channel_messages_widgets)
         self.messages_updated.connect(self.update_messages_ui)
-        self.messages_frame = main_widget, channel_messages_widgets
-        return main_widget, channel_messages_widgets  # Return the main widget and the dictionary of message widgets
+        self.messages_frame = main_widget
+        self.channel_widgets = channel_widgets
+        return main_widget, channel_widgets  # Return the main widget and the dictionary of message widgets
 
     def on_channel_selected(self, item: QListWidgetItem):
         channel = item.data(Qt.ItemDataRole.UserRole)
@@ -95,19 +87,17 @@ class MessagesManager(QObject):
 
         self.show_channel(channel)
 
-        channel_messages = self.fetch_messages(channel["id"])
+        channel_messages = MessagesManager.fetch_messages(self.slack_client, channel["id"])
 
         # Assuming messages_manager has a method to update the UI with new messages
         self.messages_updated.emit(channel, channel_messages)
 
     @staticmethod
-    def fetch_messages(channel_id: str):
+    def fetch_messages(slack_client: WebClient, channel_id: str):
         try:
             response = slack_client.conversations_history(channel=channel_id, limit=10)
             channel_messages = response.get("messages")
-            # compile the messages into one before rendering
-            for message in channel_messages:
-                print(type(message["text"]))
+            # TODO: compile the messages into one before rendering
             channel_messages = [parse.render_message(message["text"]) for message in channel_messages if
                                 "text" in message]
             return channel_messages
@@ -116,7 +106,7 @@ class MessagesManager(QObject):
             return []
 
     def show_channel(self, channel: dict):
-        messages_widgets = self.messages_frame[1]
+        messages_widgets = self.channel_widgets
         # Hide the previously selected channel's messages widget
         if self.selected_channel in messages_widgets:
             messages_widgets[self.selected_channel].setVisible(False)
@@ -129,14 +119,13 @@ class MessagesManager(QObject):
             messages_widgets[channel["id"]].setVisible(True)
 
     def update_messages_ui(self, channel):
-        print("Updating messages UI")
         channel_id = channel["id"]
         # Access the specific channel's messages widget based on channel_id
-        messages_widget = self.messages_frame[1][channel_id]
+        messages_widget = self.channel_widgets[channel_id]
         layout = messages_widget.layout()
 
         # Hide the currently visible channel's messages widget
-        self.messages_frame[1][self.selected_channel].setVisible(False)
+        self.channel_widgets[self.selected_channel].setVisible(False)
 
         self.show_channel(channel)
 
@@ -148,8 +137,8 @@ class MessagesManager(QObject):
 
         # Add new messages to the specific channel's widget
         print(f"Updating messages for channel {channel_id}")
-        self.messages_frame[1][channel_id].setVisible(True)
-        channel_messages = self.fetch_messages(channel_id)
+        self.channel_widgets[channel_id].setVisible(True)
+        channel_messages = self.fetch_messages(self.slack_client, channel_id)
         # Add new messages
         for message in channel_messages:
             messages_widget.append(f"\n<p>{message}</p>")
