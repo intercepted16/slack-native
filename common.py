@@ -1,5 +1,6 @@
 from PySide6.QtCore import QObject, Signal
-from PySide6.QtWidgets import QWidget, QHBoxLayout, QListWidget, QListWidgetItem, QLabel, QVBoxLayout, QTextBrowser
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QListWidget, QListWidgetItem, QLabel, QVBoxLayout, QTextBrowser, \
+    QLineEdit
 from slack_sdk.errors import SlackApiError
 from slack_sdk.web import WebClient
 from PySide6.QtGui import QFont
@@ -42,19 +43,33 @@ class MessagesManager(QObject):
                 item.setData(Qt.ItemDataRole.UserRole, channel)
                 channels_list_widget.addItem(item)
 
+                # Create a widget to hold the text browser, label, and input
+                scroll_widget_container = QWidget()
+                scroll_layout = QVBoxLayout(scroll_widget_container)
+
                 # Create a text browser widget to display messages for each channel
                 scroll_widget = QTextBrowser()
                 scroll_widget.setOpenExternalLinks(True)
-                scroll_widget.setVisible(False)  # Initially hidden
+                # scroll_widget.setVisible(False)  # Initially hidden
+                print(scroll_widget)
 
-                messages_layout = QVBoxLayout(scroll_widget)
                 label = QLabel(f"Messages for {channel['name']}")
                 label.setFont(QFont("Arial", 20))
                 label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-                messages_layout.addWidget(label)
+                scroll_layout.addWidget(label)
+                scroll_layout.addWidget(scroll_widget)
+                input = QLineEdit()
 
-                # Store the scrollable widget in the dictionary
-                channel_widgets[channel["id"]] = scroll_widget
+                def on_return_pressed(input: QLineEdit, channel: dict):
+                    text = input.text()
+                    input.clear()
+                    MessagesManager.send_message(self.slack_client, channel["id"], text)
+
+                input.returnPressed.connect(lambda input=input, channel=channel: on_return_pressed(input, channel))
+                scroll_layout.addWidget(input)
+
+                # Store the scrollable widget container in the dictionary
+                channel_widgets[channel["id"]] = scroll_widget_container
 
         # Connect the itemPressed signal to a lambda that calls on_channel_selected and passes the
         # channel_messages_widgets
@@ -130,10 +145,10 @@ class MessagesManager(QObject):
         self.show_channel(channel)
 
         # Clear existing messages in the channel's widget before adding new ones
-        while layout.count():
-            child = layout.takeAt(0)
-            if child.widget():
-                child.widget().deleteLater()
+        # while layout.count():
+        #     child = layout.takeAt(0)
+        #     if child.widget():
+        #         child.widget().deleteLater()
 
         # Add new messages to the specific channel's widget
         print(f"Updating messages for channel {channel_id}")
@@ -141,5 +156,16 @@ class MessagesManager(QObject):
         channel_messages = self.fetch_messages(self.slack_client, channel_id)
         # Add new messages
         for message in channel_messages:
-            messages_widget.append(f"\n<p>{message}</p>")
+            print(messages_widget.findChild(QTextBrowser))
+            messages_widget.findChild(QTextBrowser).append(f"\n<p>{message}</p>")
             layout.addWidget(messages_widget)
+
+    @staticmethod
+    def send_message(slack_client: WebClient, channel_id: str, message: str):
+        try:
+            response = slack_client.chat_postMessage(channel=channel_id, text=message)
+            print(response)
+            return response
+        except SlackApiError as e:
+            print(e.response['error'])
+            return None
