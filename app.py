@@ -12,11 +12,27 @@ from common import MessagesManager
 from slack_sdk import WebClient
 from PySide6.QtGui import QResizeEvent
 import keyring
+from PySide6.QtWidgets import QSystemTrayIcon, QMenu
+from PySide6.QtGui import QAction
+from PySide6.QtWidgets import QMessageBox
+from PySide6.QtCore import QSharedMemory
 
 # Keyring is cross-platform, e.g: on Windows, it uses the Windows Credential Manager
 slack_token = keyring.get_password("slack_native", "access_token")
 slack_client = WebClient(slack_token)
 messages: List[dict] = []
+
+
+def is_single_instance(shared_memory: QSharedMemory):
+    if shared_memory.create(1):
+        # Shared memory segment created successfully
+        return True
+    elif shared_memory.error() == QSharedMemory.SharedMemoryError.AlreadyExists:
+        # Shared memory segment already exists
+        return False
+    else:
+        # Other errors occurred
+        return False
 
 
 class MainWindow(QMainWindow):
@@ -117,6 +133,41 @@ class ThemeManager:
 def main():
     messages_manager = MessagesManager(slack_client)
     app = QApplication(sys.argv)
+    shared_memory = QSharedMemory("com.slack_native.shared_memory")
+    if not is_single_instance(shared_memory):
+        message_box = QMessageBox()
+        message_box.setIcon(QMessageBox.Icon.Warning)
+        message_box.setWindowTitle("Already Running")
+        message_box.setText("Another instance of the application is already running.")
+        message_box.setWindowIcon(QIcon("assets/slack.png"))
+        message_box.exec()
+        exit(0)
+
+    app.setQuitOnLastWindowClosed(False)
+
+    # Create the icon
+    icon = QIcon("assets/slack.png")
+
+    # Create the tray
+    tray = QSystemTrayIcon()
+    tray.setIcon(icon)
+    tray.setVisible(True)
+
+    # Create the menu
+    menu = QMenu()
+
+    # Add a Quit option to the menu.
+    quit_action = QAction("Quit")
+    quit_action.triggered.connect(app.quit)
+    menu.addAction(quit_action)
+
+    # Add the menu to the tray
+    tray.setContextMenu(menu)
+
     window = MainWindow(messages_manager)
     ThemeManager.enable_system(app)
+    window.tray = tray
+    window.show()
+    app.aboutToQuit.connect(lambda: sys.exit(0))
+    app.exec_()
     return app, window, messages_manager
