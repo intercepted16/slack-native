@@ -41,10 +41,14 @@ class Global:
 global_instance = Global()
 
 
-def main(messages_manager: MessagesManager):
+def main(messages_manager: MessagesManager, window):
     global_instance.messages_manager = messages_manager
-    print(messages_manager)
-    app.run(debug=True, use_reloader=False)
+    global_instance.show_window_signal = window
+    print("window", window)
+    print("msg manager", messages_manager)
+    app.run(debug=True, use_reloader=False, port=5000)
+    print("window", window)
+    print("msg manager", messages_manager)
 
 
 def handle_challenge(request: Request):
@@ -130,3 +134,17 @@ def test_update():
         return "Channel ID and messages are required.", 400
     global_instance.messages_manager.messages_updated.emit(channel, test_messages)
     return "Test update successful."
+
+
+@app.route("/ipc", methods=["POST"])
+def ipc():
+    body = request.json
+    print(body)
+    action: dict = body.get("action")
+    if not action:
+        return "No action specified", 400
+    if action.get("window"):
+        action = action.get("window")
+        if action == "show":
+            global_instance.show_window_signal.show_window.emit()
+    return "IPC endpoint"

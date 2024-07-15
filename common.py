@@ -7,6 +7,8 @@ from PySide6.QtGui import QFont
 from PySide6.QtCore import Qt
 from typing import List
 import parse
+class ShowWindowSignal(QObject):
+    show_window = Signal()
 
 
 class MessagesManager(QObject):
