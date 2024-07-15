@@ -1,6 +1,7 @@
 from typing import List
 
 import darkdetect
+import requests
 from PySide6.QtWidgets import QApplication, QMainWindow, QStyleFactory, QLabel, QPushButton, \
     QVBoxLayout  # Add QVBoxLayout import
 from PySide6.QtGui import QPalette, QColor, QIcon, QFont
@@ -130,18 +131,9 @@ class ThemeManager:
             ThemeManager.enable_light(app)
 
 
-def main():
+def main(show_window_signal):
     messages_manager = MessagesManager(slack_client)
     app = QApplication(sys.argv)
-    shared_memory = QSharedMemory("com.slack_native.shared_memory")
-    if not is_single_instance(shared_memory):
-        message_box = QMessageBox()
-        message_box.setIcon(QMessageBox.Icon.Warning)
-        message_box.setWindowTitle("Already Running")
-        message_box.setText("Another instance of the application is already running.")
-        message_box.setWindowIcon(QIcon("assets/slack.png"))
-        message_box.exec()
-        exit(0)
 
     app.setQuitOnLastWindowClosed(False)
 
@@ -163,8 +155,10 @@ def main():
 
     # Add the menu to the tray
     tray.setContextMenu(menu)
+    tray.activated.connect(lambda reason: window.show() if reason == QSystemTrayIcon.ActivationReason.Trigger else None)
 
     window = MainWindow(messages_manager)
+    show_window_signal.show_window.connect(lambda: window.show())
     ThemeManager.enable_system(app)
     window.tray = tray
     window.show()
