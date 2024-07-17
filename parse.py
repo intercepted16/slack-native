@@ -1,11 +1,13 @@
+import glob
 import os
 import re
 import time
-from typing import List, Any
+from typing import List
 from functools import lru_cache
+from typing import Any
+
 import emoji_data_python
 import requests
-import glob
 
 # Slack formatting patterns
 bold_pattern = re.compile(r'\*(.*?)\*')
@@ -26,7 +28,7 @@ def path_to_emoji(emoji_name: str):
 
 
 @lru_cache
-def fetch_emojis(emoji_names: tuple[str]) -> dict[str, str | Any] | None:
+def fetch_emojis(emoji_names: tuple[str, ...]) -> dict[str, str | Any] | None:
     emoji_paths_to_fetch = []
     for emoji_name in emoji_names:
         emoji_path = path_to_emoji(emoji_name)
@@ -45,12 +47,24 @@ def fetch_emojis(emoji_names: tuple[str]) -> dict[str, str | Any] | None:
         "sec-fetch-dest": "empty",
         "sec-fetch-mode": "cors",
         "sec-fetch-site": "same-site",
-        "cookie": "b=.7f6d3a7f91a49fa25deb1a7a75981bb8; shown_ssb_redirect_page=1; tz=600; ssb_instance_id=88782ac3-cf28-4bae-972f-37557833f9be; shown_download_ssb_modal=1; show_download_ssb_banner=1; no_download_ssb_banner=1; lc=1719302924; d-s=1720603559; d=xoxd-559HyoyjyEFcp501mtzwT0NiXC%2F6hUEMusQaYBXD%2Fv8JjATjratJD0Po2my0oDea2O2QEjfTXYDsEZAukAJRqxp3vVU8gWodPCHDNhe3bGbwqyqTYNkFkMgC7M8GBw%2By%2B4MBfFIyX7XCqkYqP1bB43iKPVpEixWz%2FSsFLrdtY1SP12heGvEwSSGYS1zS%2FDSWC6BQSmE%3D; OptanonConsent=isGpcEnabled=0&datestamp=Wed+Jul+10+2024+19%3A28%3A07+GMT%2B1000+(Australian+Eastern+Standard+Time)&version=202402.1.0&browserGpcFlag=0&isIABGlobal=false&hosts=&consentId=be51caff-fb27-4b35-a38f-ad1e7e1b5dbc&interactionCount=1&isAnonUser=1&landingPath=NotLandingPage&groups=1%3A1%2C3%3A1%2C2%3A1%2C4%3A0&AwaitingReconsent=false; x=7f6d3a7f91a49fa25deb1a7a75981bb8.1720606589; web_cache_last_updated337a2a499a436d9ae22c2cffdca55138=1720606594597"
+        "cookie": "b=.7f6d3a7f91a49fa25deb1a7a75981bb8; shown_ssb_redirect_page=1; tz=600; "
+                  "ssb_instance_id=88782ac3-cf28-4bae-972f-37557833f9be; shown_download_ssb_modal=1; "
+                  "show_download_ssb_banner=1; no_download_ssb_banner=1; lc=1719302924; d-s=1720603559; "
+                  "d=xoxd-559HyoyjyEFcp501mtzwT0NiXC%2F6hUEMusQaYBXD"
+                  "%2Fv8JjATjratJD0Po2my0oDea2O2QEjfTXYDsEZAukAJRqxp3vVU8gWodPCHDNhe3bGbwqyqTYNkFkMgC7M8GBw%2By"
+                  "%2B4MBfFIyX7XCqkYqP1bB43iKPVpEixWz%2FSsFLrdtY1SP12heGvEwSSGYS1zS%2FDSWC6BQSmE%3D; "
+                  "OptanonConsent=isGpcEnabled=0&datestamp=Wed+Jul+10+2024+19%3A28%3A07+GMT%2B1000+("
+                  "Australian+Eastern+Standard+Time)&version=202402.1.0&browserGpcFlag=0&isIABGlobal=false&hosts"
+                  "=&consentId=be51caff-fb27-4b35-a38f-ad1e7e1b5dbc&interactionCount=1&isAnonUser=1&landingPath"
+                  "=NotLandingPage&groups=1%3A1%2C3%3A1%2C2%3A1%2C4%3A0&AwaitingReconsent=false; "
+                  "x=7f6d3a7f91a49fa25deb1a7a75981bb8.1720606589; "
+                  "web_cache_last_updated337a2a499a436d9ae22c2cffdca55138=1720606594597"
     }
 
     # TODO: replace sample token with a valid token
     data = {
-        "token": "xoxc-2210535565-7290482160290-7327065577730-16df343f7eeb21cd1964d263c717c20f16a3279b3f5bf14143a7c5cd25d89b85",
+        "token": "xoxc-2210535565-7290482160290-7327065577730"
+                 "-16df343f7eeb21cd1964d263c717c20f16a3279b3f5bf14143a7c5cd25d89b85",
         "updated_ids": {path: 0 for path in emoji_paths_to_fetch}
     }
 
@@ -58,7 +72,6 @@ def fetch_emojis(emoji_names: tuple[str]) -> dict[str, str | Any] | None:
 
     result = response.json()["results"]
     if len(result) > 0:
-        print(result)
         # download the files locally for caching & rendering
         res = requests.get(result[0]["value"])
         # if the folder does not exist, create it
@@ -94,7 +107,7 @@ def render_message(text):
     # render standard emojis
     text = emoji_data_python.replace_colons(text, False)
     # render custom emojis
-    shorthands = emoji_pattern.findall(text)
+    shorthands: List[str] = emoji_pattern.findall(text)
     shorthands_tuple = tuple(shorthands)
     # type: ignore
     emoji_urls = fetch_emojis(shorthands_tuple)
