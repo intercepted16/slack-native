@@ -44,18 +44,14 @@ global_instance = Global()
 def main(messages_manager: MessagesManager, window):
     global_instance.messages_manager = messages_manager
     global_instance.show_window_signal = window
-    print("window", window)
-    print("msg manager", messages_manager)
     app.run(debug=True, use_reloader=False, port=5000)
-    print("window", window)
-    print("msg manager", messages_manager)
 
 
-def handle_challenge(request: Request):
-    request_json = request.json
+def handle_challenge(req: Request):
+    request_json = req.json
     if request_json["challenge"] is not None:
-        body = request.get_data()
-        timestamp = request.headers['X-Slack-Request-Timestamp']
+        body = req.get_data()
+        timestamp = req.headers['X-Slack-Request-Timestamp']
         if abs(time.time() - float(timestamp)) > 60 * 5:
             # The request timestamp is more than five minutes from local time.
             # It could be a replay attack, so let's ignore it.
@@ -64,11 +60,9 @@ def handle_challenge(request: Request):
         signature = 'v0=' + hmac.new(os.environ.get("SLACK_SIGNING_SECRET").encode('utf-8'),
                                      sig_basestring.encode('utf-8'),
                                      digestmod=hashlib.sha256).hexdigest()
-        slack_signature = request.headers['X-Slack-Signature']
-        print("sig", signature)
-        print(slack_signature)
+        slack_signature = req.headers['X-Slack-Signature']
         if hmac.compare_digest(signature, slack_signature):
-            return jsonify({"challenge": request.json["challenge"]})
+            return jsonify({"challenge": req.json["challenge"]})
 
 
 @app.route('/install')
@@ -139,7 +133,6 @@ def test_update():
 @app.route("/ipc", methods=["POST"])
 def ipc():
     body = request.json
-    print(body)
     action: dict = body.get("action")
     if not action:
         return "No action specified", 400
