@@ -23,7 +23,7 @@ def send_message_on_return(slack_client: WebClient, input_element: QLineEdit, ch
 class MessagesManager(QObject):
     messages_updated = Signal(dict, list)  # Signal carrying a list of messages
     messages_frame: QWidget = None
-    channel_widgets: dict = None
+    channel_widgets: dict = {}
     selected_channel: str = None
 
     def __init__(self, slack_client: WebClient):
@@ -74,21 +74,20 @@ class MessagesManager(QObject):
         channels_list_widget.itemPressed.connect(
             lambda selected_channel: self.on_channel_selected(selected_channel))
 
-        # Add the first channel's messages widget to the layout, or handle the default case
         for channel_id, widget in channel_widgets.items():
             main_layout.addWidget(widget, 3)
             widget.setVisible(False)
-
-        if channels:
-            first_channel_id = channels[0]["id"]
-            channel_widgets[first_channel_id].setVisible(True)
 
         main_layout.addWidget(channels_list_widget, 1)  # Channels list takes less space
 
         self.messages_updated.connect(self.update_messages_ui)
         self.messages_frame = main_widget
         self.channel_widgets = channel_widgets
-        return main_widget, channel_widgets  # Return the main widget and the dictionary of message widgets
+
+        if channels:
+            self.show_channel(channels[0])
+
+        return main_widget, channel_widgets
 
     def on_channel_selected(self, item: QListWidgetItem):
         channel = item.data(Qt.ItemDataRole.UserRole)
@@ -119,17 +118,19 @@ class MessagesManager(QObject):
             return []
 
     def show_channel(self, channel: dict):
-        messages_widgets = self.channel_widgets
+        channel_widgets = self.channel_widgets
+        print("channel_widgets", channel_widgets)
         # Hide the previously selected channel's messages widget
-        if self.selected_channel in messages_widgets:
-            messages_widgets[self.selected_channel].setVisible(False)
+        if channel_widgets:
+            if self.selected_channel in channel_widgets:
+                channel_widgets[self.selected_channel].setVisible(False)
 
         # Reassign the selected channel
         self.selected_channel = channel["id"]
 
         # Show the selected channel's messages widget
         if channel:
-            messages_widgets[channel["id"]].setVisible(True)
+            channel_widgets[channel["id"]].setVisible(True)
 
     def update_messages_ui(self, channel, channel_messages):
         channel_id = channel["id"]
