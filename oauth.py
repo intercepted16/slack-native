@@ -68,7 +68,7 @@ def handle_challenge(req: Request):
 @app.route('/install')
 def install():
     client_id = os.environ.get("SLACK_CLIENT_ID")
-    scopes = "channels:read,chat:write,channels:history,groups:history,im:history,mpim:history,emoji:read"
+    scopes = "channels:read,chat:write,channels:history,groups:history,im:history,mpim:history,emoji:read,users:read"
     if bool(os.environ.get("DEV")) is True:
         redirect_uri = os.environ.get("DEV_SLACK_REDIRECT_URI")
     else:
