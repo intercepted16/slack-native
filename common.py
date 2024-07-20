@@ -1,13 +1,49 @@
+import json
+import os
+
+import PySide6
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QListWidget, QListWidgetItem, QLabel, QVBoxLayout, QTextBrowser, \
     QLineEdit
+from PySide6.QtGui import QTextCursor, QTextCharFormat
 from slack_sdk.errors import SlackApiError
 from slack_sdk.web import WebClient
 from PySide6.QtGui import QFont
 from PySide6.QtCore import Qt
-from typing import List
+from typing import List, Optional
 import parse
 from functools import partial
+
+
+class TextBrowser(QTextBrowser):
+    def __init__(self, parent: Optional[PySide6.QtWidgets.QWidget] = None):
+        super().__init__(parent)
+        self.default_font_size = 14
+
+    def wheelEvent(self, event):
+        if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
+            delta = event.angleDelta().y() / 120  # Typically, one wheel step is 120 units
+            self.change_font_size(delta)
+        else:
+            super().wheelEvent(event)  # Call the base class implementation for normal scrolling
+
+    def keyPressEvent(self, event):
+        if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
+            if event.key() == Qt.Key.Key_Plus or event.key() == Qt.Key.Key_Equal:
+                self.change_font_size(1)
+            elif event.key() == Qt.Key.Key_Minus:
+                self.change_font_size(-1)
+
+    def change_font_size(self, delta):
+        print(delta)
+        self.default_font_size += delta
+        self.default_font_size = max(1, self.default_font_size)
+        cursor = self.textCursor()
+        cursor.select(QTextCursor.SelectionType.Document)
+        text_format = QTextCharFormat()
+        text_format.setFontPointSize(self.default_font_size)
+        cursor.mergeCharFormat(text_format)
+        self.mergeCurrentCharFormat(text_format)
 
 
 class ShowWindowSignal(QObject):
@@ -28,6 +64,7 @@ class MessagesManager(QObject):
 
     def __init__(self, slack_client: WebClient):
         super().__init__()
+        self.default_font_size = 14
         self.slack_client = slack_client
 
     def create_page(self, channels: List[dict] = None):
@@ -51,7 +88,7 @@ class MessagesManager(QObject):
                 scroll_widget_container = QWidget()
                 scroll_layout = QVBoxLayout(scroll_widget_container)
 
-                scroll_widget = QTextBrowser()
+                scroll_widget = TextBrowser()
                 scroll_widget.setOpenExternalLinks(True)
                 print(scroll_widget)
 
@@ -110,8 +147,9 @@ class MessagesManager(QObject):
             response = slack_client.conversations_history(channel=channel_id, limit=10)
             channel_messages = response.get("messages")
             # TODO: compile the messages into one before rendering
-            channel_messages = [parse.render_message(message["text"]) for message in channel_messages if
-                                "text" in message]
+            for message in channel_messages:
+                message["text"] = parse.render_message(message["text"])
+
             return channel_messages
         except SlackApiError as e:
             print(e.response['error'])
@@ -135,18 +173,77 @@ class MessagesManager(QObject):
     def update_messages_ui(self, channel, channel_messages):
         channel_id = channel["id"]
         messages_widget = self.channel_widgets[channel_id]
+        text_browser = messages_widget.findChild(QTextBrowser)
         layout = messages_widget.layout()
 
         self.show_channel(channel)
 
-        # Add new messages to the specific channel's widget
+        # Log the channel update
         print(f"Updating messages for channel {channel_id}")
-        self.channel_widgets[channel_id].setVisible(True)
-        # Add new messages
+
+        # Ensure the channel widget is visible
+        messages_widget.setVisible(True)
+
+        # Add new messages to the specific channel's widget
         for message in channel_messages:
-            print(messages_widget.findChild(QTextBrowser))
-            messages_widget.findChild(QTextBrowser).append(f"\n<p>{message}</p>")
+            # Check if the message has a user
+            if "user" not in message:
+                print("No user found in message", message)
+                continue
+
+            user_id = message["user"]
+            if user_id:
+                cached_user = MessagesManager.get_cached_user(user_id)
+                if cached_user:
+                    print(f"User found in cache: {cached_user} (ID: {user_id})")
+                    message["user"] = cached_user
+                else:
+                    print(f"User not found in cache: {user_id}")
+                    user_info = self.slack_client.users_info(user=user_id)
+                    user = user_info["user"]["real_name"]
+                    MessagesManager.cache_user(user_id, user)
+                    message["user"] = user
+
+            # Append the formatted message to the QTextBrowser
+            cursor = text_browser.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.End)
+
+            # Format the username
+            user_format = QTextCharFormat()
+            user_format.setFontWeight(QFont.Weight.Bold)
+            user_format.setFontPointSize(20)
+            cursor.insertText(f"{message['user']}\n", user_format)
+
+            # Format the message text
+            text_format = QTextCharFormat()
+            text_format.setFontPointSize(14)
+            cursor.insertText(f"{message['text']}\n", text_format)
+
+        # Add the messages widget to the layout if not already added
+        if messages_widget not in [layout.itemAt(i).widget() for i in range(layout.count())]:
             layout.addWidget(messages_widget)
+
+    @staticmethod
+    def get_cached_user(user_id: str):
+        data_dir = os.path.join(os.environ.get("LOCALAPPDATA"), "slack_native")
+        if not os.path.exists(data_dir):
+            os.makedirs(data_dir)
+        users_cache = os.path.join(data_dir, "users.json")
+        if not os.path.exists(users_cache):
+            with open(users_cache, "w") as f:
+                json.dump({}, f)
+            return None
+        with open(users_cache, "r") as f:
+            users: dict[str, dict] = json.load(f)
+            return users.get(user_id)
+
+    @staticmethod
+    def cache_user(user_id: str, user: dict):
+        with open(os.environ.get("LOCALAPPDATA") + "/slack_native/users.json", "r") as f:
+            users: dict[str, dict] = json.load(f)
+            users[user_id] = user
+            with open(os.environ.get("LOCALAPPDATA") + "/slack_native/users.json", "w") as f:
+                json.dump(users, f)
 
     @staticmethod
     def send_message(slack_client: WebClient, channel_id: str, message: str):
