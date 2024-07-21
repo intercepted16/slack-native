@@ -2,6 +2,7 @@ import json
 import os
 
 import PySide6
+import requests
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QListWidget, QListWidgetItem, QLabel, QVBoxLayout, QTextBrowser, \
     QLineEdit
@@ -177,12 +178,12 @@ class MessagesManager(QObject):
         user_info = slack_client.users_info(user=user_id)
         return user_info["user"]
 
-    @staticmethod
-    async def fetch_image(url):
-        import aiohttp
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as response:
-                return await response.read()
+    async def fetch_image(self, url):
+        image = await self.runner.run(
+            requests.get, url
+        )
+        image.raise_for_status()
+        return image.content
 
     async def update_messages_ui(self, channel, channel_messages):
         channel_id = channel["id"]
@@ -207,33 +208,39 @@ class MessagesManager(QObject):
                 continue
 
             user_id = message["user"]
+            cached_users = MessagesManager.get_cached_users()
             if user_id:
-                cached_user = MessagesManager.get_cached_user(user_id)
+                cached_user = cached_users.get(user_id)
                 if cached_user:
                     print(f"User found in cache: {cached_user} (ID: {user_id})")
                     message["user"] = cached_user
                 else:
-                    tasks.append(lambda user_id=user_id: self.fetch_user_info(self.slack_client, user_id))
+                    print("user and client", user_id, self.slack_client)
+                    tasks.append(partial(self.fetch_user_info, self.slack_client, user_id))
 
-        users: [dict] = []
+        users: dict[str, dict] = {}
+        print("norm tasks", tasks)
         async for user in self.runner.run_parallel(tasks):
             user = await user
             user_id = user["id"]
-            MessagesManager.cache_user(user_id, user)
-            users.append(user)
-
+            users[user_id] = user
         for user in users:
-            user_id = user["id"]
+            user_id = users[user]["id"]
             message["user"] = user
-            image_data = {key: value for key, value in user["profile"].items() if key.startswith('image_')}
+            image_data = {key: value for key, value in users[user]["profile"].items() if key.startswith('image_')}
 
             image_tasks = []
 
             for key, value in image_data.items():
-                image_tasks.append(lambda value=value: self.fetch_image(value))
+                print("fetching image", value)
+                print("key", key)
+                image_tasks.append(partial(self.fetch_image, value))
+
+            print("img tasks", image_tasks)
 
             images = []
             async for image in self.runner.run_parallel(image_tasks):
+                print("image", image)
                 images.append(await image)
 
             for key, image in zip(image_data.keys(), images):
@@ -241,13 +248,26 @@ class MessagesManager(QObject):
                 with open(image_path, "wb") as f:
                     f.write(image)
 
-                user["profile"][key] = image_path
-            MessagesManager.cache_user(user_id, user)
+                print("writing images and key", key)
+                users[user]["profile"][key] = image_path
+                print("user", user)
+            MessagesManager.cache_users(users)
+        # after caching the users, update the messages
+        for message in channel_messages:
+            message["user"] = users.get(message["user"])
 
         for message in channel_messages:
+            print("Message", message)
             cursor = text_browser.textCursor()
             cursor.movePosition(QTextCursor.MoveOperation.End)
-
+            if "user" in message and message["user"] is not None:
+                if "profile" not in message["user"]:
+                    print("No profile found in message", message)
+                    continue
+            else:
+                # Handle the case where "user" is not in the message or is None
+                print("User not found or user is None in message", message)
+                continue
             img_format = QTextImageFormat()
             img_format.setName(message["user"]["profile"]["image_48"])  # Specify the path to your image
             img_format.setWidth(50)  # Set the desired width
@@ -269,7 +289,7 @@ class MessagesManager(QObject):
             layout.addWidget(messages_widget)
 
     @staticmethod
-    def get_cached_user(user_id: str):
+    def get_cached_users():
         data_dir = os.path.join(os.environ.get("LOCALAPPDATA"), "slack_native")
         if not os.path.exists(data_dir):
             os.makedirs(data_dir)
@@ -280,15 +300,17 @@ class MessagesManager(QObject):
             return None
         with open(users_cache, "r") as f:
             users: dict[str, dict] = json.load(f)
-            return users.get(user_id)
+            return users
 
     @staticmethod
-    def cache_user(user_id: str, user: dict):
-        with open(os.environ.get("LOCALAPPDATA") + "/slack_native/users.json", "r") as f:
-            users: dict[str, dict] = json.load(f)
-            users[user_id] = user
-            with open(os.environ.get("LOCALAPPDATA") + "/slack_native/users.json", "w") as f:
-                json.dump(users, f)
+    def cache_users(users: dict[str, dict]):
+        with open(os.environ.get("LOCALAPPDATA") + "/slack_native/users.json", "r") as r:
+            current_users: dict[str, dict] = json.load(r)
+            for user in users:
+                current_users[user] = users[user]
+
+            with open(os.environ.get("LOCALAPPDATA") + "/slack_native/users.json", "w") as w:
+                json.dump(users, w)
 
     @staticmethod
     def send_message(slack_client: WebClient, channel_id: str, message: str):
