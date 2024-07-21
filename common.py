@@ -176,6 +176,9 @@ class MessagesManager(QObject):
         text_browser = messages_widget.findChild(QTextBrowser)
         layout = messages_widget.layout()
 
+        # clear the text browser
+        text_browser.clear()
+
         self.show_channel(channel)
 
         # Log the channel update
@@ -203,6 +206,7 @@ class MessagesManager(QObject):
                     user = user_info["user"]["real_name"]
                     MessagesManager.cache_user(user_id, user)
                     message["user"] = user
+
 
             # Append the formatted message to the QTextBrowser
             cursor = text_browser.textCursor()
