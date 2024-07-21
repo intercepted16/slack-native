@@ -5,7 +5,7 @@ import PySide6
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QListWidget, QListWidgetItem, QLabel, QVBoxLayout, QTextBrowser, \
     QLineEdit
-from PySide6.QtGui import QTextCursor, QTextCharFormat
+from PySide6.QtGui import QTextCursor, QTextCharFormat, QTextImageFormat
 from slack_sdk.errors import SlackApiError
 from slack_sdk.web import WebClient
 from PySide6.QtGui import QFont
@@ -13,6 +13,7 @@ from PySide6.QtCore import Qt
 from typing import List, Optional
 import parse
 from functools import partial
+from qt_async_threads import QtAsyncRunner
 
 
 class TextBrowser(QTextBrowser):
@@ -62,10 +63,11 @@ class MessagesManager(QObject):
     channel_widgets: dict = {}
     selected_channel: str = None
 
-    def __init__(self, slack_client: WebClient):
+    def __init__(self, slack_client: WebClient, runner: QtAsyncRunner):
         super().__init__()
         self.default_font_size = 14
         self.slack_client = slack_client
+        self.runner = runner
 
     def create_page(self, channels: List[dict] = None):
         if channels is None:
@@ -117,7 +119,7 @@ class MessagesManager(QObject):
 
         main_layout.addWidget(channels_list_widget, 1)  # Channels list takes less space
 
-        self.messages_updated.connect(self.update_messages_ui)
+        self.messages_updated.connect(self.runner.to_sync(self.update_messages_ui))
         self.messages_frame = main_widget
         self.channel_widgets = channel_widgets
 
@@ -170,7 +172,19 @@ class MessagesManager(QObject):
         if channel:
             channel_widgets[channel["id"]].setVisible(True)
 
-    def update_messages_ui(self, channel, channel_messages):
+    @staticmethod
+    async def fetch_user_info(slack_client, user_id) -> dict:
+        user_info = slack_client.users_info(user=user_id)
+        return user_info["user"]
+
+    @staticmethod
+    async def fetch_image(url):
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                return await response.read()
+
+    async def update_messages_ui(self, channel, channel_messages):
         channel_id = channel["id"]
         messages_widget = self.channel_widgets[channel_id]
         text_browser = messages_widget.findChild(QTextBrowser)
@@ -184,12 +198,10 @@ class MessagesManager(QObject):
         # Log the channel update
         print(f"Updating messages for channel {channel_id}")
 
-        # Ensure the channel widget is visible
-        messages_widget.setVisible(True)
+        tasks = []
 
         # Add new messages to the specific channel's widget
         for message in channel_messages:
-            # Check if the message has a user
             if "user" not in message:
                 print("No user found in message", message)
                 continue
@@ -201,29 +213,58 @@ class MessagesManager(QObject):
                     print(f"User found in cache: {cached_user} (ID: {user_id})")
                     message["user"] = cached_user
                 else:
-                    print(f"User not found in cache: {user_id}")
-                    user_info = self.slack_client.users_info(user=user_id)
-                    user = user_info["user"]["real_name"]
-                    MessagesManager.cache_user(user_id, user)
-                    message["user"] = user
+                    tasks.append(lambda user_id=user_id: self.fetch_user_info(self.slack_client, user_id))
 
+        users: [dict] = []
+        async for user in self.runner.run_parallel(tasks):
+            user = await user
+            user_id = user["id"]
+            MessagesManager.cache_user(user_id, user)
+            users.append(user)
 
-            # Append the formatted message to the QTextBrowser
+        for user in users:
+            user_id = user["id"]
+            message["user"] = user
+            image_data = {key: value for key, value in user["profile"].items() if key.startswith('image_')}
+
+            image_tasks = []
+
+            for key, value in image_data.items():
+                image_tasks.append(lambda value=value: self.fetch_image(value))
+
+            images = []
+            async for image in self.runner.run_parallel(image_tasks):
+                images.append(await image)
+
+            for key, image in zip(image_data.keys(), images):
+                image_path = f"{os.environ.get('LOCALAPPDATA')}/slack_native/{user_id}_{key}.png"
+                with open(image_path, "wb") as f:
+                    f.write(image)
+
+                user["profile"][key] = image_path
+            MessagesManager.cache_user(user_id, user)
+
+        for message in channel_messages:
             cursor = text_browser.textCursor()
             cursor.movePosition(QTextCursor.MoveOperation.End)
+
+            img_format = QTextImageFormat()
+            img_format.setName(message["user"]["profile"]["image_48"])  # Specify the path to your image
+            img_format.setWidth(50)  # Set the desired width
+            img_format.setHeight(50)  # Set the desired height
+            cursor.insertImage(img_format)
 
             # Format the username
             user_format = QTextCharFormat()
             user_format.setFontWeight(QFont.Weight.Bold)
             user_format.setFontPointSize(20)
-            cursor.insertText(f"{message['user']}\n", user_format)
+            cursor.insertText(f"{message['user']['real_name']}\n", user_format)
 
             # Format the message text
             text_format = QTextCharFormat()
             text_format.setFontPointSize(14)
             cursor.insertText(f"{message['text']}\n", text_format)
 
-        # Add the messages widget to the layout if not already added
         if messages_widget not in [layout.itemAt(i).widget() for i in range(layout.count())]:
             layout.addWidget(messages_widget)
 
