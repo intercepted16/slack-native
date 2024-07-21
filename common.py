@@ -1,17 +1,20 @@
+import base64
+import io
 import json
 import os
+import threading
 
 import PySide6
 import requests
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, Signal, QByteArray
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QListWidget, QListWidgetItem, QLabel, QVBoxLayout, QTextBrowser, \
     QLineEdit
-from PySide6.QtGui import QTextCursor, QTextCharFormat, QTextImageFormat
+from PySide6.QtGui import QTextCursor, QTextCharFormat, QTextImageFormat, QPixmap, QImage
 from slack_sdk.errors import SlackApiError
 from slack_sdk.web import WebClient
 from PySide6.QtGui import QFont
 from PySide6.QtCore import Qt
-from typing import List, Optional
+from typing import List, Optional, Any
 import parse
 from functools import partial
 from qt_async_threads import QtAsyncRunner
@@ -145,6 +148,17 @@ class MessagesManager(QObject):
         self.messages_updated.emit(channel, channel_messages)
 
     @staticmethod
+    def cache_profile_pictures(user, resolutions: List[str], images: List[bytes]):
+        print("CACHE PROFILE PICTURES", user, resolutions, images)
+        for res, image in zip(resolutions, images):
+            image_path = f"{os.environ.get('LOCALAPPDATA')}/slack_native/{user["id"]}_image_{res}.png"
+            with open(image_path, "wb") as f:
+                f.write(image)
+            user["profile"][f"image_{res}"] = image_path
+        # now cache the image path in the user's profile
+        MessagesManager.cache_users({user["id"]: user})
+
+    @staticmethod
     def fetch_messages(slack_client: WebClient, channel_id: str):
         try:
             response = slack_client.conversations_history(channel=channel_id, limit=10)
@@ -209,6 +223,8 @@ class MessagesManager(QObject):
 
             user_id = message["user"]
             cached_users = MessagesManager.get_cached_users()
+            if not cached_users:
+                cached_users = {}
             if user_id:
                 cached_user = cached_users.get(user_id)
                 if cached_user:
@@ -218,43 +234,37 @@ class MessagesManager(QObject):
                     print("user and client", user_id, self.slack_client)
                     tasks.append(partial(self.fetch_user_info, self.slack_client, user_id))
 
-        users: dict[str, dict] = {}
-        print("norm tasks", tasks)
-        async for user in self.runner.run_parallel(tasks):
-            user = await user
-            user_id = user["id"]
-            users[user_id] = user
-        for user in users:
-            user_id = users[user]["id"]
-            message["user"] = user
-            image_data = {key: value for key, value in users[user]["profile"].items() if key.startswith('image_')}
+            print("tasks", tasks)
 
-            image_tasks = []
+            resolutions: list[str] = ["48"]
+            print("norm tasks", tasks)
+            async for user in self.runner.run_parallel(tasks):
+                user = await user
+                user_id = user["id"]
+                message["user"] = user
 
-            for key, value in image_data.items():
-                print("fetching image", value)
-                print("key", key)
-                image_tasks.append(partial(self.fetch_image, value))
+                for res in resolutions:
+                    image_tasks: list[partial | Any] = [partial(self.fetch_image, user["profile"][f"image_{res}"])]
 
-            print("img tasks", image_tasks)
+                images = []
+                async for image in self.runner.run_parallel(image_tasks):
+                    print("image", image)
+                    images.append(await image)
 
-            images = []
-            async for image in self.runner.run_parallel(image_tasks):
-                print("image", image)
-                images.append(await image)
+                # run this in a separate thread, because it's a blocking operation & is unnecessary to be awaited
+                io_thread = threading.Thread(target=MessagesManager.cache_profile_pictures,
+                                             args=(user, resolutions, images))
+                io_thread.start()
 
-            for key, image in zip(image_data.keys(), images):
-                image_path = f"{os.environ.get('LOCALAPPDATA')}/slack_native/{user_id}_{key}.png"
-                with open(image_path, "wb") as f:
-                    f.write(image)
-
-                print("writing images and key", key)
-                users[user]["profile"][key] = image_path
                 print("user", user)
-            MessagesManager.cache_users(users)
-        # after caching the users, update the messages
-        for message in channel_messages:
-            message["user"] = users.get(message["user"])
+                # MessagesManager.cache_users(users)
+                # set the images to their binary data
+                for res, image in zip(resolutions, images):
+                    message["user"]["profile"][f"image_{res}"] = image
+
+                # after caching the users, update the messages
+                # for message in channel_messages:
+                #     message["user"] = users.get(message["user"])
 
         for message in channel_messages:
             print("Message", message)
@@ -268,11 +278,26 @@ class MessagesManager(QObject):
                 # Handle the case where "user" is not in the message or is None
                 print("User not found or user is None in message", message)
                 continue
+
+            cursor = text_browser.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.End)
+
+            # Convert the image data to a data URL
+            data_url: str | None = None
+            if isinstance(message["user"]["profile"]["image_48"], str):
+                print("not bytes")
+                data_url = message["user"]["profile"]["image_48"]
+            else:
+                data_url = f"data:image/png;base64,{base64.b64encode(message["user"]["profile"]["image_48"]).decode()}"
+
+            # Create QTextImageFormat
             img_format = QTextImageFormat()
-            img_format.setName(message["user"]["profile"]["image_48"])  # Specify the path to your image
-            img_format.setWidth(50)  # Set the desired width
-            img_format.setHeight(50)  # Set the desired height
-            cursor.insertImage(img_format)
+            img_format.setName(data_url)  # Set image data URL
+            img_format.setWidth(50)  # Set desired width
+            img_format.setHeight(50)  # Set desired height
+
+            # Insert the image into QTextDocument
+            cursor.insertImage(img_format)  # Use QTextImageFormat for insertion
 
             # Format the username
             user_format = QTextCharFormat()
@@ -285,8 +310,8 @@ class MessagesManager(QObject):
             text_format.setFontPointSize(14)
             cursor.insertText(f"{message['text']}\n", text_format)
 
-        if messages_widget not in [layout.itemAt(i).widget() for i in range(layout.count())]:
-            layout.addWidget(messages_widget)
+            if messages_widget not in [layout.itemAt(i).widget() for i in range(layout.count())]:
+                layout.addWidget(messages_widget)
 
     @staticmethod
     def get_cached_users():
@@ -300,17 +325,19 @@ class MessagesManager(QObject):
             return None
         with open(users_cache, "r") as f:
             users: dict[str, dict] = json.load(f)
+            print("GETTING USERS, users", users)
             return users
 
     @staticmethod
     def cache_users(users: dict[str, dict]):
         with open(os.environ.get("LOCALAPPDATA") + "/slack_native/users.json", "r") as r:
             current_users: dict[str, dict] = json.load(r)
+            new_users = current_users
             for user in users:
-                current_users[user] = users[user]
+                new_users[user] = users[user]
 
             with open(os.environ.get("LOCALAPPDATA") + "/slack_native/users.json", "w") as w:
-                json.dump(users, w)
+                json.dump(new_users, w)
 
     @staticmethod
     def send_message(slack_client: WebClient, channel_id: str, message: str):
