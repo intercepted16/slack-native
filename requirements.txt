@@ -5,3 +5,4 @@ keyring
 requests
 PySide6
 darkdetect
+aiohttp

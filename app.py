@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QStyleFactory, QLabel, 
 from PySide6.QtWidgets import QHBoxLayout, QStackedWidget
 from PySide6.QtWidgets import QSystemTrayIcon, QMenu
 from PySide6.QtWidgets import QWidget
+from qt_async_threads import QtAsyncRunner
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
@@ -122,7 +123,7 @@ class ThemeManager:
 
 
 def main(show_window_signal):
-    messages_manager = MessagesManager(slack_client)
+    messages_manager = MessagesManager(slack_client, QtAsyncRunner())
     app = QApplication(sys.argv)
 
     app.setQuitOnLastWindowClosed(False)
