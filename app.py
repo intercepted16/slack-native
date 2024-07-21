@@ -150,5 +150,4 @@ def main(show_window_signal):
     window.tray = tray
     window.show()
     app.aboutToQuit.connect(lambda: sys.exit(0))
-    app.exec_()
     return app, window, messages_manager
