@@ -163,6 +163,8 @@ class MessagesManager(QObject):
         try:
             response = slack_client.conversations_history(channel=channel_id, limit=10)
             channel_messages = response.get("messages")
+            # The newest message should be at the bottom, so reverse the list
+            channel_messages = list(reversed(channel_messages))
             # TODO: compile the messages into one before rendering
             for message in channel_messages:
                 message["text"] = parse.render_message(message["text"])
