@@ -9,7 +9,7 @@ import requests
 from PySide6.QtCore import QObject, Signal, QByteArray
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QListWidget, QListWidgetItem, QLabel, QVBoxLayout, QTextBrowser, \
     QLineEdit
-from PySide6.QtGui import QTextCursor, QTextCharFormat, QTextImageFormat, QPixmap, QImage
+from PySide6.QtGui import QTextCursor, QTextCharFormat, QTextImageFormat, QPixmap, QImage, QPainter, QBrush
 from slack_sdk.errors import SlackApiError
 from slack_sdk.web import WebClient
 from PySide6.QtGui import QFont
@@ -18,6 +18,30 @@ from typing import List, Optional, Any
 import parse
 from functools import partial
 from qt_async_threads import QtAsyncRunner
+
+
+class RoundedImage(QImage):
+    def __init__(self, source_path: str, radius: int):
+        super().__init__(source_path)
+        self.source_path: str | None = None
+        self.radius = radius
+        self.image = super()
+        image = self.image
+        width, height = image.width(), image.height()
+
+        # Create a mask image with rounded corners
+        mask = QImage(width, height, QImage.Format.Format_Alpha8)
+        mask.fill(Qt.GlobalColor.transparent)
+
+        # Draw the rounded rectangle
+        painter = QPainter(mask)
+        painter.setBrush(QBrush(Qt.GlobalColor.black))
+        painter.setPen(Qt.GlobalColor.transparent)
+        painter.drawRoundedRect(0, 0, width, height, self.radius, self.radius)
+        painter.end()
+
+        # Apply the mask to the original image
+        image.setAlphaChannel(mask)
 
 
 class TextBrowser(QTextBrowser):
@@ -292,20 +316,12 @@ class MessagesManager(QObject):
             else:
                 data_url = f"data:image/png;base64,{base64.b64encode(message["user"]["profile"]["image_48"]).decode()}"
 
-            # Create QTextImageFormat
-            img_format = QTextImageFormat()
-            img_format.setName(data_url)  # Set image data URL
-            img_format.setWidth(50)  # Set desired width
-            img_format.setHeight(50)  # Set desired height
+            cursor.insertImage(RoundedImage(data_url, 50))
 
-            # Insert the image into QTextDocument
-            cursor.insertImage(img_format)  # Use QTextImageFormat for insertion
-
-            # Format the username
             user_format = QTextCharFormat()
-            user_format.setFontWeight(QFont.Weight.Bold)
             user_format.setFontPointSize(20)
-            cursor.insertText(f"{message['user']['real_name']}\n", user_format)
+            user_format.setFontWeight(QFont.Weight.Bold)
+            cursor.insertText(f"\n{message['user']['real_name']}\n", user_format)
 
             # Format the message text
             text_format = QTextCharFormat()
