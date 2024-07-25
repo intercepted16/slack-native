@@ -305,9 +305,6 @@ class MessagesManager(QObject):
                 print("User not found or user is None in message", message)
                 continue
 
-            cursor = text_browser.textCursor()
-            cursor.movePosition(QTextCursor.MoveOperation.End)
-
             # Convert the image data to a data URL
             data_url: str | None = None
             if isinstance(message["user"]["profile"]["image_48"], str):
@@ -323,10 +320,13 @@ class MessagesManager(QObject):
             user_format.setFontWeight(QFont.Weight.Bold)
             cursor.insertText(f"\n{message['user']['real_name']}\n", user_format)
 
-            # Format the message text
-            text_format = QTextCharFormat()
-            text_format.setFontPointSize(14)
-            cursor.insertText(f"{message['text']}\n", text_format)
+            text_format = "font-size: 18px;"
+            cursor.insertHtml(f"<p style=\"{text_format}\">{message['text']}</p>\n")
+            # if it's the last message, add less space
+            if message == channel_messages[-1]:
+                cursor.insertHtml("<br>")
+            else:
+                cursor.insertHtml("<br>" * 2)
 
             if messages_widget not in [layout.itemAt(i).widget() for i in range(layout.count())]:
                 layout.addWidget(messages_widget)
