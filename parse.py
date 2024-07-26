@@ -92,7 +92,7 @@ def fetch_emojis(emoji_names: tuple[str, ...]) -> dict[str, str | Any] | None:
 
 
 @lru_cache()
-def render_message(text):
+def parse_message(text):
     start = time.time()
     # Replace bold text
     text = bold_pattern.sub(r'<b>\1</b>', text)

@@ -3,6 +3,7 @@ import io
 import json
 import os
 import threading
+import hashlib
 
 import PySide6
 import requests
@@ -20,9 +21,50 @@ from functools import partial
 from qt_async_threads import QtAsyncRunner
 
 
+def render_message(message, messages_widget, layout, text_browser):
+    if isinstance(message["user"]["profile"]["image_48"], bytes):
+        print("Rendering message and image is", message["user"]["profile"]["image_48"][0:10])
+    else:
+        print("Rendering message and image is", message["user"]["profile"]["image_48"])
+    cursor = text_browser.textCursor()
+    cursor.movePosition(QTextCursor.MoveOperation.End)
+
+    data_url = message["user"]["profile"]["image_48"]
+
+    print("also person being rendered is", message["user"]["profile"]["real_name"])
+
+    cursor.insertImage(RoundedImage(data_url, 50))
+
+    user_format = QTextCharFormat()
+    user_format.setFontPointSize(20)
+    user_format.setFontWeight(QFont.Weight.Bold)
+    cursor.insertText(f"\n{message['user']['real_name']}\n", user_format)
+
+    text_format = "font-size: 18px;"
+    cursor.insertHtml(f"<p style=\"{text_format}\">{message['text']}</p>\n")
+    # if it's the last message, add less space
+    if message["is_last"]:
+        cursor.insertHtml("<br>")
+    else:
+        cursor.insertHtml("<br>" * 2)
+
+    if messages_widget not in [layout.itemAt(i).widget() for i in range(layout.count())]:
+        layout.addWidget(messages_widget)
+
+
+def calculate_md5(content):
+    md5_hash = hashlib.md5()
+    md5_hash.update(content)
+    return md5_hash.hexdigest()
+
+
 class RoundedImage(QImage):
-    def __init__(self, source_path: str, radius: int):
-        super().__init__(source_path)
+    def __init__(self, source_path: str | bytes, radius: int):
+        if isinstance(source_path, str):
+            super().__init__(source_path)
+        else:
+            super().__init__()
+            super().loadFromData(source_path)
         self.source_path: str | None = None
         self.radius = radius
         self.image = super()
@@ -86,6 +128,7 @@ def send_message_on_return(slack_client: WebClient, input_element: QLineEdit, ch
 
 
 class MessagesManager(QObject):
+    _file_write_lock = threading.Lock()
     messages_updated = Signal(dict, list)  # Signal carrying a list of messages
     messages_frame: QWidget = None
     channel_widgets: dict = {}
@@ -120,7 +163,6 @@ class MessagesManager(QObject):
 
                 scroll_widget = TextBrowser()
                 scroll_widget.setOpenExternalLinks(True)
-                print(scroll_widget)
 
                 label = QLabel(f"Messages for {channel['name']}")
                 label.setFont(QFont("Arial", 20))
@@ -172,15 +214,21 @@ class MessagesManager(QObject):
         self.messages_updated.emit(channel, channel_messages)
 
     @staticmethod
-    def cache_profile_pictures(user, resolutions: List[str], images: List[bytes]):
-        print("CACHE PROFILE PICTURES", user, resolutions, images)
-        for res, image in zip(resolutions, images):
-            image_path = f"{os.environ.get('LOCALAPPDATA')}/slack_native/{user["id"]}_image_{res}.png"
-            with open(image_path, "wb") as f:
-                f.write(image)
-            user["profile"][f"image_{res}"] = image_path
-        # now cache the image path in the user's profile
-        MessagesManager.cache_users({user["id"]: user})
+    def cache_profile_pictures(users: list[dict, str]):
+        for user in users:
+            MessagesManager.cache_profile_picture(user, ["48"], [user["profile"]["image_48"]])
+
+    @staticmethod
+    def cache_profile_picture(user, resolutions: List[str], images: List[bytes]):
+        with MessagesManager._file_write_lock:
+            for res, image in zip(resolutions, images):
+                file_name = calculate_md5(user["id"].encode()) + "image_" + res + ".png"
+                image_path = f"{os.environ.get('LOCALAPPDATA')}/slack_native/{file_name}"
+                with open(image_path, "wb") as f:
+                    f.write(image)
+                user["profile"][f"image_{res}"] = image_path
+            # now cache the image path in the user's profile
+            MessagesManager.cache_users({user["id"]: user})
 
     @staticmethod
     def fetch_messages(slack_client: WebClient, channel_id: str):
@@ -191,7 +239,7 @@ class MessagesManager(QObject):
             channel_messages = list(reversed(channel_messages))
             # TODO: compile the messages into one before rendering
             for message in channel_messages:
-                message["text"] = parse.render_message(message["text"])
+                message["text"] = parse.parse_message(message["text"])
 
             return channel_messages
         except SlackApiError as e:
@@ -242,28 +290,42 @@ class MessagesManager(QObject):
         tasks = []
 
         # Add new messages to the specific channel's widget
+        users_pending_cache = []
         for message in channel_messages:
             if "user" not in message:
-                print("No user found in message", message)
+                print("No user found in message")
                 continue
 
             user_id = message["user"]
             cached_users = MessagesManager.get_cached_users()
             if not cached_users:
                 cached_users = {}
+
+            message["is_last"] = message == channel_messages[-1]
+
+            was_cached = None
+
             if user_id:
                 cached_user = cached_users.get(user_id)
                 if cached_user:
-                    print(f"User found in cache: {cached_user} (ID: {user_id})")
+                    print(f"User found in cache: (ID: {user_id})")
                     message["user"] = cached_user
-                else:
+                    render_message(message, messages_widget, layout, text_browser)
+                    continue
+                elif user_id not in users_pending_cache:
                     print("user and client", user_id, self.slack_client)
+                    was_cached = False
                     tasks.append(partial(self.fetch_user_info, self.slack_client, user_id))
+                else:
+                    print("User is already being processed", user_id)
+                    file_name = calculate_md5(user_id.encode()) + "image_48.png"
+                    message["user"]["profile"]["image_48"] = os.path.join(os.getenv("LOCALAPPDATA"), "slack_native",
+                                                                          file_name)
 
-            print("tasks", tasks)
+                    render_message(message, messages_widget, layout, text_browser)
+                    continue
 
             resolutions: list[str] = ["48"]
-            print("norm tasks", tasks)
             async for user in self.runner.run_parallel(tasks):
                 user = await user
                 user_id = user["id"]
@@ -274,62 +336,26 @@ class MessagesManager(QObject):
 
                 images = []
                 async for image in self.runner.run_parallel(image_tasks):
-                    print("image", image)
                     images.append(await image)
 
-                # run this in a separate thread, because it's a blocking operation & is unnecessary to be awaited
-                io_thread = threading.Thread(target=MessagesManager.cache_profile_pictures,
-                                             args=(user, resolutions, images))
-                io_thread.start()
-
-                print("user", user)
-                # MessagesManager.cache_users(users)
-                # set the images to their binary data
                 for res, image in zip(resolutions, images):
                     message["user"]["profile"][f"image_{res}"] = image
+
+                # MessagesManager.cache_users(users)
+                # set the images to their binary data
 
                 # after caching the users, update the messages
                 # for message in channel_messages:
                 #     message["user"] = users.get(message["user"])
+            if not was_cached:
+                users_pending_cache.append(message["user"])
+                print("doogy dag", message["user"]["profile"]["image_48"][0:10])
+            render_message(message, messages_widget, layout, text_browser)
 
-        for message in channel_messages:
-            print("Message", message)
-            cursor = text_browser.textCursor()
-            cursor.movePosition(QTextCursor.MoveOperation.End)
-            if "user" in message and message["user"] is not None:
-                if "profile" not in message["user"]:
-                    print("No profile found in message", message)
-                    continue
-            else:
-                # Handle the case where "user" is not in the message or is None
-                print("User not found or user is None in message", message)
-                continue
-
-            # Convert the image data to a data URL
-            data_url: str | None = None
-            if isinstance(message["user"]["profile"]["image_48"], str):
-                print("not bytes")
-                data_url = message["user"]["profile"]["image_48"]
-            else:
-                data_url = f"data:image/png;base64,{base64.b64encode(message["user"]["profile"]["image_48"]).decode()}"
-
-            cursor.insertImage(RoundedImage(data_url, 50))
-
-            user_format = QTextCharFormat()
-            user_format.setFontPointSize(20)
-            user_format.setFontWeight(QFont.Weight.Bold)
-            cursor.insertText(f"\n{message['user']['real_name']}\n", user_format)
-
-            text_format = "font-size: 18px;"
-            cursor.insertHtml(f"<p style=\"{text_format}\">{message['text']}</p>\n")
-            # if it's the last message, add less space
-            if message == channel_messages[-1]:
-                cursor.insertHtml("<br>")
-            else:
-                cursor.insertHtml("<br>" * 2)
-
-            if messages_widget not in [layout.itemAt(i).widget() for i in range(layout.count())]:
-                layout.addWidget(messages_widget)
+        # run this in a separate thread, because it's a blocking operation & is unnecessary to be awaited
+        if len(users_pending_cache) > 0:
+            io_thread = threading.Thread(target=MessagesManager.cache_profile_pictures, args=(users_pending_cache,))
+            io_thread.start()
 
     @staticmethod
     def get_cached_users():
@@ -343,7 +369,6 @@ class MessagesManager(QObject):
             return None
         with open(users_cache, "r") as f:
             users: dict[str, dict] = json.load(f)
-            print("GETTING USERS, users", users)
             return users
 
     @staticmethod
