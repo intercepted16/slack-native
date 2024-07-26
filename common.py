@@ -214,7 +214,7 @@ class MessagesManager(QObject):
         self.messages_updated.emit(channel, channel_messages)
 
     @staticmethod
-    def cache_profile_pictures(users: list[dict, str]):
+    def cache_profile_pictures(users: dict[dict, str]):
         for user in users:
             MessagesManager.cache_profile_picture(user, ["48"], [user["profile"]["image_48"]])
 
@@ -287,11 +287,10 @@ class MessagesManager(QObject):
         # Log the channel update
         print(f"Updating messages for channel {channel_id}")
 
-        tasks = []
-
         # Add new messages to the specific channel's widget
-        users_pending_cache = []
+        users_pending_cache = {}
         for message in channel_messages:
+            tasks = []
             if "user" not in message:
                 print("No user found in message")
                 continue
@@ -303,7 +302,7 @@ class MessagesManager(QObject):
 
             message["is_last"] = message == channel_messages[-1]
 
-            was_cached = None
+            was_cached = True
 
             if user_id:
                 cached_user = cached_users.get(user_id)
@@ -348,7 +347,8 @@ class MessagesManager(QObject):
                 # for message in channel_messages:
                 #     message["user"] = users.get(message["user"])
             if not was_cached:
-                users_pending_cache.append(message["user"])
+                users_pending_cache[user_id] = message["user"]
+                print("user pending cache", user_id)
                 print("doogy dag", message["user"]["profile"]["image_48"][0:10])
             render_message(message, messages_widget, layout, text_browser)
 
