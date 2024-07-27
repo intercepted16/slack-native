@@ -1,40 +1,20 @@
 import sys
-from typing import List, Callable
+from typing import List
 
 import darkdetect
 import keyring
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction
-from PySide6.QtGui import QPalette, QColor, QIcon, QFont
+from PySide6.QtGui import QPalette, QColor, QIcon
 from PySide6.QtGui import QResizeEvent
 from PySide6.QtWidgets import QApplication, QMainWindow, QStyleFactory, QLabel, QPushButton, QVBoxLayout
-from PySide6.QtWidgets import QHBoxLayout, QStackedWidget
-from PySide6.QtWidgets import QSystemTrayIcon, QMenu
+from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QWidget
 from qt_async_threads import QtAsyncRunner
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
 from common import MessagesUpdatedSignal
-
-
-class SideBar(QWidget):
-    contentStack = None
-
-    def __init__(self, buttons: List[tuple[QPushButton, QLabel | QWidget]]):
-        super().__init__()
-        self.layout = QVBoxLayout()
-        self.buttons = buttons
-        self.contentStack = QStackedWidget()
-
-        for i, (button, page) in enumerate(self.buttons):
-            self.contentStack.addWidget(page)
-            self.layout.addWidget(button)
-            button.clicked.connect(lambda _, index=i: self.contentStack.setCurrentIndex(index))
-
-        self.layout.addStretch(1)
-        self.setLayout(self.layout)
-
+from ui.widgets.sidebar import SideBar
+from ui.widgets.tray import Tray
 
 # Keyring is cross-platform, e.g: on Windows, it uses the Windows Credential Manager
 slack_token = keyring.get_password("slack_native", "access_token")
@@ -78,25 +58,9 @@ class MainWindow(QMainWindow):
         ]
 
         self.sidebar = SideBar(self.buttons)
-        self.sidebarLayout = self.sidebar.layout
         self.contentStack = self.sidebar.contentStack
 
-        # # Add pages to the contentStack and buttons to the sidebar
-        # i: int
-        # for i, (button, page) in enumerate(self.buttons):
-        #     self.sidebarLayout.addWidget(button)
-        #
-        #     if isinstance(page, QLabel):
-        #         page.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        #         page.setFont(QFont("Arial", 20))
-        #
-        #     self.contentStack.addWidget(page)
-        #
-        #     button.clicked.connect(lambda _, index=i: self.contentStack.setCurrentIndex(index))
-
-        sidebar_container = QWidget()
-        sidebar_container.setLayout(self.sidebarLayout)
-        main_layout.addWidget(sidebar_container, 1)
+        main_layout.addWidget(self.sidebar, 1)
         main_layout.addWidget(self.contentStack, 3)
 
         # Set centralWidget as the central widget of the main window
@@ -148,26 +112,10 @@ def main(show_window_signal):
 
     app.setQuitOnLastWindowClosed(False)
 
-    icon = QIcon("assets/slack.png")
-
-    tray = QSystemTrayIcon()
-    tray.setIcon(icon)
-    tray.setVisible(True)
-
-    menu = QMenu()
-
-    quit_action = QAction("Quit")
-    quit_action.triggered.connect(app.quit)
-    menu.addAction(quit_action)
-
-    tray.setContextMenu(menu)
-    # if single click, show the window
-    tray.activated.connect(lambda reason: window.show() if reason == QSystemTrayIcon.ActivationReason.Trigger else None)
-
     window = MainWindow(messages_manager)
     show_window_signal.show_window.connect(lambda: window.show())
     ThemeManager.enable_system(app)
-    window.tray = tray
+    window.tray = Tray(window, app)
     window.show()
     app.aboutToQuit.connect(lambda: sys.exit(0))
     return app, window, messages_manager
