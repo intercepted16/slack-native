@@ -1,4 +1,4 @@
-from app import main
+from ui import main
 from oauth import main as flask_app
 import threading
 import requests

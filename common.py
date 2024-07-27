@@ -1,120 +1,24 @@
-import base64
-import io
-import json
 import os
 import threading
-import hashlib
+from functools import partial
+from typing import List, Any
 
-import PySide6
+from messages.fetch import fetch_messages
+from ui.widgets.text_browser import TextBrowser
+
 import requests
-from PySide6.QtCore import QObject, Signal, QByteArray
+from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QListWidget, QListWidgetItem, QLabel, QVBoxLayout, QTextBrowser, \
     QLineEdit
-from PySide6.QtGui import QTextCursor, QTextCharFormat, QTextImageFormat, QPixmap, QImage, QPainter, QBrush
-from slack_sdk.errors import SlackApiError
-from slack_sdk.web import WebClient
-from PySide6.QtGui import QFont
-from PySide6.QtCore import Qt
-from typing import List, Optional, Any
-import parse
-from functools import partial
 from qt_async_threads import QtAsyncRunner
+from slack_sdk.web import WebClient
 
-
-def render_message(message, messages_widget, layout, text_browser):
-    if isinstance(message["user"]["profile"]["image_48"], bytes):
-        print("Rendering message and image is", message["user"]["profile"]["image_48"][0:10])
-    else:
-        print("Rendering message and image is", message["user"]["profile"]["image_48"])
-    cursor = text_browser.textCursor()
-    cursor.movePosition(QTextCursor.MoveOperation.End)
-
-    data_url = message["user"]["profile"]["image_48"]
-
-    print("also person being rendered is", message["user"]["profile"]["real_name"])
-
-    cursor.insertImage(RoundedImage(data_url, 50))
-
-    user_format = QTextCharFormat()
-    user_format.setFontPointSize(20)
-    user_format.setFontWeight(QFont.Weight.Bold)
-    cursor.insertText(f"\n{message['user']['real_name']}\n", user_format)
-
-    text_format = "font-size: 18px;"
-    cursor.insertHtml(f"<p style=\"{text_format}\">{message['text']}</p>\n")
-    # if it's the last message, add less space
-    if message["is_last"]:
-        cursor.insertHtml("<br>")
-    else:
-        cursor.insertHtml("<br>" * 2)
-
-    if messages_widget not in [layout.itemAt(i).widget() for i in range(layout.count())]:
-        layout.addWidget(messages_widget)
-
-
-def calculate_md5(content):
-    md5_hash = hashlib.md5()
-    md5_hash.update(content)
-    return md5_hash.hexdigest()
-
-
-class RoundedImage(QImage):
-    def __init__(self, source_path: str | bytes, radius: int):
-        if isinstance(source_path, str):
-            super().__init__(source_path)
-        else:
-            super().__init__()
-            super().loadFromData(source_path)
-        self.source_path: str | None = None
-        self.radius = radius
-        self.image = super()
-        image = self.image
-        width, height = image.width(), image.height()
-
-        # Create a mask image with rounded corners
-        mask = QImage(width, height, QImage.Format.Format_Alpha8)
-        mask.fill(Qt.GlobalColor.transparent)
-
-        # Draw the rounded rectangle
-        painter = QPainter(mask)
-        painter.setBrush(QBrush(Qt.GlobalColor.black))
-        painter.setPen(Qt.GlobalColor.transparent)
-        painter.drawRoundedRect(0, 0, width, height, self.radius, self.radius)
-        painter.end()
-
-        # Apply the mask to the original image
-        image.setAlphaChannel(mask)
-
-
-class TextBrowser(QTextBrowser):
-    def __init__(self, parent: Optional[PySide6.QtWidgets.QWidget] = None):
-        super().__init__(parent)
-        self.default_font_size = 14
-
-    def wheelEvent(self, event):
-        if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
-            delta = event.angleDelta().y() / 120  # Typically, one wheel step is 120 units
-            self.change_font_size(delta)
-        else:
-            super().wheelEvent(event)  # Call the base class implementation for normal scrolling
-
-    def keyPressEvent(self, event):
-        if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
-            if event.key() == Qt.Key.Key_Plus or event.key() == Qt.Key.Key_Equal:
-                self.change_font_size(1)
-            elif event.key() == Qt.Key.Key_Minus:
-                self.change_font_size(-1)
-
-    def change_font_size(self, delta):
-        print(delta)
-        self.default_font_size += delta
-        self.default_font_size = max(1, self.default_font_size)
-        cursor = self.textCursor()
-        cursor.select(QTextCursor.SelectionType.Document)
-        text_format = QTextCharFormat()
-        text_format.setFontPointSize(self.default_font_size)
-        cursor.mergeCharFormat(text_format)
-        self.mergeCurrentCharFormat(text_format)
+from messages.render import render_message
+from messages.send import send_message
+from users.cache import get_cached_users, cache_profile_pictures
+from utils.hashing import calculate_md5
 
 
 class ShowWindowSignal(QObject):
@@ -124,10 +28,10 @@ class ShowWindowSignal(QObject):
 def send_message_on_return(slack_client: WebClient, input_element: QLineEdit, channel: dict):
     text = input_element.text()
     input_element.clear()
-    MessagesManager.send_message(slack_client, channel["id"], text)
+    send_message(slack_client, channel["id"], text)
 
 
-class MessagesManager(QObject):
+class MessagesUpdatedSignal(QObject):
     _file_write_lock = threading.Lock()
     messages_updated = Signal(dict, list)  # Signal carrying a list of messages
     messages_frame: QWidget = None
@@ -208,43 +112,10 @@ class MessagesManager(QObject):
 
         self.show_channel(channel)
 
-        channel_messages = MessagesManager.fetch_messages(self.slack_client, channel["id"])
+        channel_messages = fetch_messages(self.slack_client, channel["id"])
 
         # Assuming messages_manager has a method to update the UI with new messages
         self.messages_updated.emit(channel, channel_messages)
-
-    @staticmethod
-    def cache_profile_pictures(users: dict[dict, str]):
-        for user in users:
-            MessagesManager.cache_profile_picture(user, ["48"], [user["profile"]["image_48"]])
-
-    @staticmethod
-    def cache_profile_picture(user, resolutions: List[str], images: List[bytes]):
-        with MessagesManager._file_write_lock:
-            for res, image in zip(resolutions, images):
-                file_name = calculate_md5(user["id"].encode()) + "image_" + res + ".png"
-                image_path = f"{os.environ.get('LOCALAPPDATA')}/slack_native/{file_name}"
-                with open(image_path, "wb") as f:
-                    f.write(image)
-                user["profile"][f"image_{res}"] = image_path
-            # now cache the image path in the user's profile
-            MessagesManager.cache_users({user["id"]: user})
-
-    @staticmethod
-    def fetch_messages(slack_client: WebClient, channel_id: str):
-        try:
-            response = slack_client.conversations_history(channel=channel_id, limit=10)
-            channel_messages = response.get("messages")
-            # The newest message should be at the bottom, so reverse the list
-            channel_messages = list(reversed(channel_messages))
-            # TODO: compile the messages into one before rendering
-            for message in channel_messages:
-                message["text"] = parse.parse_message(message["text"])
-
-            return channel_messages
-        except SlackApiError as e:
-            print(e.response['error'])
-            return []
 
     def show_channel(self, channel: dict):
         channel_widgets = self.channel_widgets
@@ -296,7 +167,7 @@ class MessagesManager(QObject):
                 continue
 
             user_id = message["user"]
-            cached_users = MessagesManager.get_cached_users()
+            cached_users = get_cached_users()
             if not cached_users:
                 cached_users = {}
 
@@ -318,6 +189,7 @@ class MessagesManager(QObject):
                 else:
                     print("User is already being processed", user_id)
                     file_name = calculate_md5(user_id.encode()) + "image_48.png"
+                    # BUG: message["user"] hasn't been updated to the user object yet, so it's a string (user id)
                     message["user"]["profile"]["image_48"] = os.path.join(os.getenv("LOCALAPPDATA"), "slack_native",
                                                                           file_name)
 
@@ -340,54 +212,12 @@ class MessagesManager(QObject):
                 for res, image in zip(resolutions, images):
                     message["user"]["profile"][f"image_{res}"] = image
 
-                # MessagesManager.cache_users(users)
-                # set the images to their binary data
-
-                # after caching the users, update the messages
-                # for message in channel_messages:
-                #     message["user"] = users.get(message["user"])
             if not was_cached:
                 users_pending_cache[user_id] = message["user"]
-                print("user pending cache", user_id)
-                print("doogy dag", message["user"]["profile"]["image_48"][0:10])
             render_message(message, messages_widget, layout, text_browser)
 
         # run this in a separate thread, because it's a blocking operation & is unnecessary to be awaited
         if len(users_pending_cache) > 0:
-            io_thread = threading.Thread(target=MessagesManager.cache_profile_pictures, args=(users_pending_cache,))
+            io_thread = threading.Thread(target=cache_profile_pictures,
+                                         args=(users_pending_cache, self._file_write_lock))
             io_thread.start()
-
-    @staticmethod
-    def get_cached_users():
-        data_dir = os.path.join(os.environ.get("LOCALAPPDATA"), "slack_native")
-        if not os.path.exists(data_dir):
-            os.makedirs(data_dir)
-        users_cache = os.path.join(data_dir, "users.json")
-        if not os.path.exists(users_cache):
-            with open(users_cache, "w") as f:
-                json.dump({}, f)
-            return None
-        with open(users_cache, "r") as f:
-            users: dict[str, dict] = json.load(f)
-            return users
-
-    @staticmethod
-    def cache_users(users: dict[str, dict]):
-        with open(os.environ.get("LOCALAPPDATA") + "/slack_native/users.json", "r") as r:
-            current_users: dict[str, dict] = json.load(r)
-            new_users = current_users
-            for user in users:
-                new_users[user] = users[user]
-
-            with open(os.environ.get("LOCALAPPDATA") + "/slack_native/users.json", "w") as w:
-                json.dump(new_users, w)
-
-    @staticmethod
-    def send_message(slack_client: WebClient, channel_id: str, message: str):
-        try:
-            response = slack_client.chat_postMessage(channel=channel_id, text=message)
-            print(response)
-            return response
-        except SlackApiError as e:
-            print(e.response['error'])
-            return None

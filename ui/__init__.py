@@ -1,5 +1,5 @@
 import sys
-from typing import List
+from typing import List, Callable
 
 import darkdetect
 import keyring
@@ -15,7 +15,26 @@ from qt_async_threads import QtAsyncRunner
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
-from common import MessagesManager
+from common import MessagesUpdatedSignal
+
+
+class SideBar(QWidget):
+    contentStack = None
+
+    def __init__(self, buttons: List[tuple[QPushButton, QLabel | QWidget]]):
+        super().__init__()
+        self.layout = QVBoxLayout()
+        self.buttons = buttons
+        self.contentStack = QStackedWidget()
+
+        for i, (button, page) in enumerate(self.buttons):
+            self.contentStack.addWidget(page)
+            self.layout.addWidget(button)
+            button.clicked.connect(lambda _, index=i: self.contentStack.setCurrentIndex(index))
+
+        self.layout.addStretch(1)
+        self.setLayout(self.layout)
+
 
 # Keyring is cross-platform, e.g: on Windows, it uses the Windows Credential Manager
 slack_token = keyring.get_password("slack_native", "access_token")
@@ -24,7 +43,7 @@ messages: List[dict] = []
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, messages_manager: MessagesManager):
+    def __init__(self, messages_manager: MessagesUpdatedSignal):
         super().__init__()
         self.messages_manager = messages_manager
 
@@ -36,9 +55,9 @@ class MainWindow(QMainWindow):
         main_layout = QHBoxLayout(
             central_widget)  # Use QHBoxLayout for main layout to place sidebar and content side by side
 
-        self.sidebarLayout = QVBoxLayout()
+        self.sidebarLayout = None
 
-        self.contentStack = QStackedWidget()
+        self.contentStack = None
 
         try:
             response = slack_client.users_conversations()
@@ -58,21 +77,22 @@ class MainWindow(QMainWindow):
             (QPushButton("Settings"), QLabel("Settings Page")),
         ]
 
-        # Add pages to the contentStack and buttons to the sidebar
-        i: int
-        for i, (button, page) in enumerate(self.buttons):
-            self.sidebarLayout.addWidget(button)
+        self.sidebar = SideBar(self.buttons)
+        self.sidebarLayout = self.sidebar.layout
+        self.contentStack = self.sidebar.contentStack
 
-            if isinstance(page, QLabel):
-                page.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                page.setFont(QFont("Arial", 20))
-
-            self.contentStack.addWidget(page)
-
-            button.clicked.connect(lambda _, index=i: self.contentStack.setCurrentIndex(index))
-
-        # Add a stretch to push the buttons to the top
-        self.sidebarLayout.addStretch(1)
+        # # Add pages to the contentStack and buttons to the sidebar
+        # i: int
+        # for i, (button, page) in enumerate(self.buttons):
+        #     self.sidebarLayout.addWidget(button)
+        #
+        #     if isinstance(page, QLabel):
+        #         page.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        #         page.setFont(QFont("Arial", 20))
+        #
+        #     self.contentStack.addWidget(page)
+        #
+        #     button.clicked.connect(lambda _, index=i: self.contentStack.setCurrentIndex(index))
 
         sidebar_container = QWidget()
         sidebar_container.setLayout(self.sidebarLayout)
@@ -123,7 +143,7 @@ class ThemeManager:
 
 
 def main(show_window_signal):
-    messages_manager = MessagesManager(slack_client, QtAsyncRunner())
+    messages_manager = MessagesUpdatedSignal(slack_client, QtAsyncRunner())
     app = QApplication(sys.argv)
 
     app.setQuitOnLastWindowClosed(False)

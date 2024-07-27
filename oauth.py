@@ -7,7 +7,7 @@ from slack_sdk.errors import SlackApiError
 import time
 import hashlib
 import hmac
-from common import MessagesManager
+from common import MessagesUpdatedSignal
 import keyring
 
 load_dotenv(".env")
@@ -27,23 +27,23 @@ else:
     redirect_uri = ""
 
 
-class Global:
+class This:
     _instance = None
 
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super(Global, cls).__new__(cls)
+            cls._instance = super(This, cls).__new__(cls)
             # Initialize your global variable here
             cls._instance.messages_manager = None
         return cls._instance
 
 
-global_instance = Global()
+this = This()
 
 
-def main(messages_manager: MessagesManager, window):
-    global_instance.messages_manager = messages_manager
-    global_instance.show_window_signal = window
+def main(messages_manager: MessagesUpdatedSignal, window):
+    this.messages_manager = messages_manager
+    this.show_window_signal = window
     app.run(debug=True, use_reloader=False, port=5000)
 
 
@@ -112,22 +112,9 @@ def listen():
             # new message received, update the UI
             messages[event["channel"]].append(event["text"])
             print(messages)
-            global_instance.messages_manager.messages_updated.emit(event["channel"], messages[event["channel"]])
+            this.messages_manager.messages_updated.emit(event["channel"], messages[event["channel"]])
 
     return "Request received."
-
-
-# Test route to update the messages, to be removed later
-@app.route("/test-update")
-def test_update():
-    channel_id = request.args.get("channel_id")
-    channel = {"id": channel_id}
-    test_messages = request.args.get("messages")
-    test_messages = test_messages.split(",")
-    if channel_id is None or messages is None:
-        return "Channel ID and messages are required.", 400
-    global_instance.messages_manager.messages_updated.emit(channel, test_messages)
-    return "Test update successful."
 
 
 @app.route("/ipc", methods=["POST"])
@@ -139,5 +126,5 @@ def ipc():
     if action.get("window"):
         action = action.get("window")
         if action == "show":
-            global_instance.show_window_signal.show_window.emit()
+            this.show_window_signal.show_window.emit()
     return "IPC endpoint"
