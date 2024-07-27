@@ -30,8 +30,9 @@ def cache_users(users: dict[str, dict]):
             json.dump(new_users, w)
 
 
-def cache_profile_pictures(users: dict[dict, str], file_write_lock=None):
+def cache_profile_pictures(users: dict[str, dict], file_write_lock=None):
     for user in users:
+        user = users[user]
         cache_profile_picture(user, ["48"], [user["profile"]["image_48"]], file_write_lock)
 
 
