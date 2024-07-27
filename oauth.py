@@ -7,7 +7,7 @@ from slack_sdk.errors import SlackApiError
 import time
 import hashlib
 import hmac
-from common import MessagesUpdatedSignal
+from signals import MessagesUpdatedSignal
 import keyring
 
 load_dotenv(".env")
@@ -112,7 +112,7 @@ def listen():
             # new message received, update the UI
             messages[event["channel"]].append(event["text"])
             print(messages)
-            this.messages_manager.messages_updated.emit(event["channel"], messages[event["channel"]])
+            this.messages_manager.messages_updated_signal.emit(event["channel"], messages[event["channel"]])
 
     return "Request received."
 

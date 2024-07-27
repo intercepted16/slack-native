@@ -7,18 +7,16 @@ class Tray(QSystemTrayIcon):
     def __init__(self, window, app):
         super().__init__()
         icon = QIcon("assets/slack.png")
-
-        tray = QSystemTrayIcon()
-        tray.setIcon(icon)
-        tray.setVisible(True)
-
+        # due to Python's garbage collection, the icon, menu & action(s) must be stored in a persistent object
+        self.setIcon(icon)
         menu = QMenu()
-
+        self.menu = menu
         quit_action = QAction("Quit")
         quit_action.triggered.connect(app.quit)
+        self.quit_action = quit_action
         menu.addAction(quit_action)
 
-        tray.setContextMenu(menu)
+        self.setContextMenu(menu)
         # if single click, show the window
-        tray.activated.connect(lambda reason: window.show() if reason == QSystemTrayIcon.ActivationReason.Trigger else None)
-
+        self.activated.connect(
+            lambda reason: window.show() if reason == QSystemTrayIcon.ActivationReason.Trigger else None)

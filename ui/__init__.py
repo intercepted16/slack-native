@@ -5,14 +5,15 @@ import darkdetect
 import keyring
 from PySide6.QtGui import QPalette, QColor, QIcon
 from PySide6.QtGui import QResizeEvent
-from PySide6.QtWidgets import QApplication, QMainWindow, QStyleFactory, QLabel, QPushButton, QVBoxLayout
+from PySide6.QtWidgets import QApplication, QMainWindow, QStyleFactory, QLabel, QPushButton
 from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QWidget
 from qt_async_threads import QtAsyncRunner
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
-from common import MessagesUpdatedSignal
+from signals import MessagesUpdatedSignal
+from ui.widgets.messages_page import MessagesPage
 from ui.widgets.sidebar import SideBar
 from ui.widgets.tray import Tray
 
@@ -47,12 +48,12 @@ class MainWindow(QMainWindow):
             print(e)
             channels = []
 
-        messages_manager.create_page(channels)
+        messages_page = MessagesPage(slack_client, self.messages_manager, channels)
 
         # TODO: add actual pages instead of QLabel placeholders
         self.buttons = [
             (QPushButton("Home"), QLabel("Home Page")),
-            (QPushButton("Messages"), messages_manager.messages_frame),
+            (QPushButton("Messages"), messages_page),
             (QPushButton("Profile"), QLabel("Profile Page")),
             (QPushButton("Settings"), QLabel("Settings Page")),
         ]
@@ -115,7 +116,10 @@ def main(show_window_signal):
     window = MainWindow(messages_manager)
     show_window_signal.show_window.connect(lambda: window.show())
     ThemeManager.enable_system(app)
-    window.tray = Tray(window, app)
+    tray = Tray(window, app)
+    tray.show()
+    # must keep a reference to tray, otherwise it will be garbage collected
+    window.tray = tray
     window.show()
     app.aboutToQuit.connect(lambda: sys.exit(0))
     return app, window, messages_manager

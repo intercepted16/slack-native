@@ -3,7 +3,7 @@ from PySide6.QtGui import QTextCharFormat, QFont, QTextCursor
 from utils.image_processing import RoundedImage
 
 
-def render_message(message, messages_widget, layout, text_browser):
+def render_message(message, text_browser):
     if isinstance(message["user"]["profile"]["image_48"], bytes):
         print("Rendering message and image is", message["user"]["profile"]["image_48"][0:10])
     else:
@@ -29,6 +29,3 @@ def render_message(message, messages_widget, layout, text_browser):
         cursor.insertHtml("<br>")
     else:
         cursor.insertHtml("<br>" * 2)
-
-    if messages_widget not in [layout.itemAt(i).widget() for i in range(layout.count())]:
-        layout.addWidget(messages_widget)
