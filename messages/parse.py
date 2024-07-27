@@ -75,8 +75,8 @@ def fetch_emojis(emoji_names: tuple[str, ...]) -> dict[str, str | Any] | None:
         # download the files locally for caching & rendering
         res = requests.get(result[0]["value"])
         # if the folder does not exist, create it
-        if not os.path.exists("tmp"):
-            os.makedirs("tmp")
+        if not os.path.exists("../tmp"):
+            os.makedirs("../tmp")
 
         emoji_paths = {}
 
@@ -111,6 +111,8 @@ def parse_message(text):
     shorthands_tuple = tuple(shorthands)
     # type: ignore
     emoji_urls = fetch_emojis(shorthands_tuple)
+    if emoji_urls is None:
+        return text
 
     def replace_emoji(match):
         return f'<img src="{emoji_urls.get(match.group(1))}" alt="{match.group(1)}" width="20" height="20">'

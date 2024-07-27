@@ -3,19 +3,19 @@ from typing import List
 
 import darkdetect
 import keyring
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction
-from PySide6.QtGui import QPalette, QColor, QIcon, QFont
+from PySide6.QtGui import QPalette, QColor, QIcon
 from PySide6.QtGui import QResizeEvent
-from PySide6.QtWidgets import QApplication, QMainWindow, QStyleFactory, QLabel, QPushButton, QVBoxLayout
-from PySide6.QtWidgets import QHBoxLayout, QStackedWidget
-from PySide6.QtWidgets import QSystemTrayIcon, QMenu
+from PySide6.QtWidgets import QApplication, QMainWindow, QStyleFactory, QLabel, QPushButton
+from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QWidget
 from qt_async_threads import QtAsyncRunner
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
-from common import MessagesManager
+from signals import MessagesUpdatedSignal
+from ui.widgets.messages_page import MessagesPage
+from ui.widgets.sidebar import SideBar
+from ui.widgets.tray import Tray
 
 # Keyring is cross-platform, e.g: on Windows, it uses the Windows Credential Manager
 slack_token = keyring.get_password("slack_native", "access_token")
@@ -24,7 +24,7 @@ messages: List[dict] = []
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, messages_manager: MessagesManager):
+    def __init__(self, messages_manager: MessagesUpdatedSignal):
         super().__init__()
         self.messages_manager = messages_manager
 
@@ -36,9 +36,9 @@ class MainWindow(QMainWindow):
         main_layout = QHBoxLayout(
             central_widget)  # Use QHBoxLayout for main layout to place sidebar and content side by side
 
-        self.sidebarLayout = QVBoxLayout()
+        self.sidebarLayout = None
 
-        self.contentStack = QStackedWidget()
+        self.contentStack = None
 
         try:
             response = slack_client.users_conversations()
@@ -48,35 +48,20 @@ class MainWindow(QMainWindow):
             print(e)
             channels = []
 
-        messages_manager.create_page(channels)
+        messages_page = MessagesPage(slack_client, self.messages_manager, channels)
 
         # TODO: add actual pages instead of QLabel placeholders
         self.buttons = [
             (QPushButton("Home"), QLabel("Home Page")),
-            (QPushButton("Messages"), messages_manager.messages_frame),
+            (QPushButton("Messages"), messages_page),
             (QPushButton("Profile"), QLabel("Profile Page")),
             (QPushButton("Settings"), QLabel("Settings Page")),
         ]
 
-        # Add pages to the contentStack and buttons to the sidebar
-        i: int
-        for i, (button, page) in enumerate(self.buttons):
-            self.sidebarLayout.addWidget(button)
+        self.sidebar = SideBar(self.buttons)
+        self.contentStack = self.sidebar.contentStack
 
-            if isinstance(page, QLabel):
-                page.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                page.setFont(QFont("Arial", 20))
-
-            self.contentStack.addWidget(page)
-
-            button.clicked.connect(lambda _, index=i: self.contentStack.setCurrentIndex(index))
-
-        # Add a stretch to push the buttons to the top
-        self.sidebarLayout.addStretch(1)
-
-        sidebar_container = QWidget()
-        sidebar_container.setLayout(self.sidebarLayout)
-        main_layout.addWidget(sidebar_container, 1)
+        main_layout.addWidget(self.sidebar, 1)
         main_layout.addWidget(self.contentStack, 3)
 
         # Set centralWidget as the central widget of the main window
@@ -123,30 +108,17 @@ class ThemeManager:
 
 
 def main(show_window_signal):
-    messages_manager = MessagesManager(slack_client, QtAsyncRunner())
+    messages_manager = MessagesUpdatedSignal(slack_client, QtAsyncRunner())
     app = QApplication(sys.argv)
 
     app.setQuitOnLastWindowClosed(False)
 
-    icon = QIcon("assets/slack.png")
-
-    tray = QSystemTrayIcon()
-    tray.setIcon(icon)
-    tray.setVisible(True)
-
-    menu = QMenu()
-
-    quit_action = QAction("Quit")
-    quit_action.triggered.connect(app.quit)
-    menu.addAction(quit_action)
-
-    tray.setContextMenu(menu)
-    # if single click, show the window
-    tray.activated.connect(lambda reason: window.show() if reason == QSystemTrayIcon.ActivationReason.Trigger else None)
-
     window = MainWindow(messages_manager)
     show_window_signal.show_window.connect(lambda: window.show())
     ThemeManager.enable_system(app)
+    tray = Tray(window, app)
+    tray.show()
+    # must keep a reference to tray, otherwise it will be garbage collected
     window.tray = tray
     window.show()
     app.aboutToQuit.connect(lambda: sys.exit(0))
