@@ -1,4 +1,3 @@
-import os
 import threading
 from functools import partial
 from typing import List, Any
@@ -12,7 +11,6 @@ from slack_sdk.web import WebClient
 from messages.render import render_message
 from users.cache import get_cached_users, cache_profile_pictures
 from users.info import fetch_user_info
-from utils.hashing import calculate_md5
 from ui.widgets.messages_page import MessagesPage
 
 
@@ -21,7 +19,6 @@ class ShowWindowSignal(QObject):
 
 
 class MessagesUpdatedSignal(QObject):
-    _file_write_lock = threading.Lock()
     messages_updated = Signal(MessagesPage, dict, list)  # Signal carrying a list of messages
     messages_frame: QWidget = None
     channel_widgets: dict = {}
@@ -64,6 +61,7 @@ class MessagesUpdatedSignal(QObject):
             tasks = []
             if "user" not in message:
                 print("No user found in message")
+                channel_messages.remove(message)
                 continue
 
             user_id = message["user"]
@@ -89,12 +87,17 @@ class MessagesUpdatedSignal(QObject):
                 # As the condition above was not met, the user is accessible in `users_pending_cache`
                 print("User is already being processed", user_id)
                 message["user"] = users_pending_cache[user_id]
-                file_name = calculate_md5(user_id.encode()) + "image_48.png"
-                message["user"]["profile"]["image_48"] = os.path.join(os.getenv("LOCALAPPDATA"), "slack_native",
-                                                                      file_name)
-
-                render_message(message, text_browser)
-                continue
+                # if the file has already been downloaded, we can just use it
+                if isinstance(message["user"]["profile"]["image_48"], bytes) or isinstance(message["user"]["profile"]["image_48"], str):
+                    render_message(message, text_browser)
+                    continue
+                else:
+                    # small case where the file has not been downloaded yet
+                    while message["user"]["lock"].locked():
+                        pass
+                    # the file has been downloaded, we can use it now
+                    render_message(message, text_browser)
+                    continue
 
             resolutions: list[str] = ["48"]
             async for user in self.runner.run_parallel(tasks):
@@ -113,10 +116,11 @@ class MessagesUpdatedSignal(QObject):
                     message["user"]["profile"][f"image_{res}"] = image
 
                 users_pending_cache[message["user"]["id"]] = message["user"]
+                users_pending_cache[message["user"]["id"]]["lock"] = threading.Lock()
             render_message(message, text_browser)
 
         # run this in a separate thread, because it's a blocking operation & is unnecessary to be awaited
         if len(users_pending_cache) > 0:
             io_thread = threading.Thread(target=cache_profile_pictures,
-                                         args=(users_pending_cache, self._file_write_lock))
+                                         args=(users_pending_cache,))
             io_thread.start()

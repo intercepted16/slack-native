@@ -1,8 +1,9 @@
 import json
 import os
+import time
 from typing import List
 
-from utils.hashing import calculate_md5
+import xxhash
 
 
 def get_cached_users():
@@ -30,19 +31,28 @@ def cache_users(users: dict[str, dict]):
             json.dump(new_users, w)
 
 
-def cache_profile_pictures(users: dict[str, dict], file_write_lock=None):
+def cache_profile_pictures(users: dict[str, dict]):
     for user in users:
         user = users[user]
-        cache_profile_picture(user, ["48"], [user["profile"]["image_48"]], file_write_lock)
+        cache_profile_picture(user, ["48"], [user["profile"]["image_48"]], user["lock"])
 
 
 def cache_profile_picture(user, resolutions: List[str], images: List[bytes], file_write_lock=None):
     with file_write_lock:
         for res, image in zip(resolutions, images):
-            file_name = calculate_md5(user["id"].encode()) + "image_" + res + ".png"
+            start = time.perf_counter()
+            file_name = xxhash.xxh64(user["id"].encode()).hexdigest() + f"_x{res}" + ".png"
+            end = time.perf_counter()
+            print(f"Time to calculate xxhash: {end - start}")
             image_path = f"{os.environ.get('LOCALAPPDATA')}/slack_native/{file_name}"
+            if os.path.exists(image_path):
+                # the hash has probably produced a collision, so we'll just skip this image
+                continue
             with open(image_path, "wb") as f:
+                print("image is", image)
                 f.write(image)
             user["profile"][f"image_{res}"] = image_path
         # now cache the image path in the user's profile
+        # before caching the user, we need to remove the lock
+        user.pop("lock")
         cache_users({user["id"]: user})
