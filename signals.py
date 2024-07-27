@@ -76,8 +76,6 @@ class MessagesUpdatedSignal(QObject):
 
             message["is_last"] = i == length - 1
 
-            was_cached = True
-
             cached_user = cached_users.get(user_id)
             if cached_user:
                 print(f"User found in cache: (ID: {user_id})")
@@ -86,12 +84,12 @@ class MessagesUpdatedSignal(QObject):
                 continue
             elif user_id not in users_pending_cache:
                 print("user and client", user_id, self.slack_client)
-                was_cached = False
                 tasks.append(partial(fetch_user_info, self.slack_client, user_id))
             else:
+                # As the condition above was not met, the user is accessible in `users_pending_cache`
                 print("User is already being processed", user_id)
+                message["user"] = users_pending_cache[user_id]
                 file_name = calculate_md5(user_id.encode()) + "image_48.png"
-                # BUG: message["user"] hasn't been updated to the user object yet, so it's a string (user id)
                 message["user"]["profile"]["image_48"] = os.path.join(os.getenv("LOCALAPPDATA"), "slack_native",
                                                                       file_name)
 
@@ -114,8 +112,7 @@ class MessagesUpdatedSignal(QObject):
                 for res, image in zip(resolutions, images):
                     message["user"]["profile"][f"image_{res}"] = image
 
-            if not was_cached:
-                users_pending_cache[user_id] = message["user"]
+                users_pending_cache[message["user"]["id"]] = message["user"]
             render_message(message, text_browser)
 
         # run this in a separate thread, because it's a blocking operation & is unnecessary to be awaited
