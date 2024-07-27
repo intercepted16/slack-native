@@ -22,7 +22,7 @@ class ShowWindowSignal(QObject):
 
 class MessagesUpdatedSignal(QObject):
     _file_write_lock = threading.Lock()
-    messages_updated = Signal(dict, list)  # Signal carrying a list of messages
+    messages_updated = Signal(MessagesPage, dict, list)  # Signal carrying a list of messages
     messages_frame: QWidget = None
     channel_widgets: dict = {}
     selected_channel: str = None
@@ -32,6 +32,7 @@ class MessagesUpdatedSignal(QObject):
         self.default_font_size = 14
         self.slack_client = slack_client
         self.runner = runner
+        self.messages_updated.connect(runner.to_sync(self.update_messages_ui))
 
     async def fetch_image(self, url):
         image = await self.runner.run(
@@ -42,8 +43,11 @@ class MessagesUpdatedSignal(QObject):
 
     async def update_messages_ui(self, messages_page: MessagesPage, channel: dict, channel_messages: List[dict]):
         channel_id = channel["id"]
-        messages_widget = self.channel_widgets[channel_id]
+        channel_widgets = messages_page.channel_widgets
+        print(f"Channel widgets: {channel_widgets}")
+        messages_widget = channel_widgets[channel_id]
         text_browser = messages_widget.findChild(QTextBrowser)
+        print(f"Text browser: {text_browser}")
 
         # clear the text browser
         text_browser.clear()
