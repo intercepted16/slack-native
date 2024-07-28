@@ -20,7 +20,7 @@ def render_message(message, text_browser):
     user_format = QTextCharFormat()
     user_format.setFontPointSize(20)
     user_format.setFontWeight(QFont.Weight.Bold)
-    cursor.insertText(f"\n{message['user']['real_name']}\n", user_format)
+    cursor.insertText(f"\n{message['user']['profile']['real_name']}\n", user_format)
 
     text_format = "font-size: 18px;"
     cursor.insertHtml(f"<p style=\"{text_format}\">{message['text']}</p>\n")
