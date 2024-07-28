@@ -8,3 +8,6 @@ darkdetect
 qt_async_threads
 emoji_data_python
 xxhash
+httpretty
+names
+pillow

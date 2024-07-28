@@ -1,8 +1,12 @@
+import io
+import os
 import threading
 from functools import partial
 from typing import List, Any
 
 import requests
+from PIL import Image
+
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QWidget, QTextBrowser
 from qt_async_threads import QtAsyncRunner
@@ -31,7 +35,15 @@ class MessagesUpdatedSignal(QObject):
         self.runner = runner
         self.messages_updated.connect(runner.to_sync(self.update_messages_ui))
 
-    async def fetch_image(self, url):
+    async def fetch_image(self, url: str):
+        if os.environ.get("DEV"):
+            # In development mode, the image is not 48 x 48, so we need to resize it
+            img = Image.open(url)
+            new_img = img.resize((48, 48))
+            bytes_io = io.BytesIO()
+            new_img.save(bytes_io, format="PNG")
+            return bytes_io.getvalue()
+
         image = await self.runner.run(
             requests.get, url
         )
@@ -53,6 +65,7 @@ class MessagesUpdatedSignal(QObject):
 
         # Log the channel update
         print(f"Updating messages for channel {channel_id}")
+        print(channel_messages)
 
         # Add new messages to the specific channel's widget
         users_pending_cache = {}
