@@ -1,11 +1,28 @@
 from typing import List
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QListWidgetItem, QWidget, QHBoxLayout, QListWidget
+from PySide6.QtWidgets import QListWidgetItem, QWidget, QHBoxLayout, QListWidget, QTextBrowser
+from qt_async_threads import QtAsyncRunner
 from slack_sdk.web import WebClient
+from PySide6.QtWidgets import QVBoxLayout, QLabel, QSplitter
 
 from messages.fetch import fetch_messages
+from messages.render import render_messages
+from request_interceptor import MockUser
+from ui.widgets.message import Message
 from ui.widgets.messages_browser import MessagesBrowser
+
+
+class ThreadSidebar(QWidget):
+    def __init__(self, slack_client, runner: QtAsyncRunner, messages: List[dict] = None):
+        super().__init__()
+        self.text_browser = QTextBrowser()
+        if messages is None:
+            messages = []
+        render_messages()
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel("Threads"))
+        layout.addWidget(self.text_browser)
 
 
 class MessagesPage(QWidget):
@@ -20,6 +37,9 @@ class MessagesPage(QWidget):
             channels = []
 
         main_layout = QHBoxLayout(self)
+        # create a QSplitter to allow resizing of the channel list and the messages
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        main_layout.addWidget(splitter)
 
         # Dictionary to store scrollable widgets for each channel
         channel_widgets = {}
@@ -38,15 +58,19 @@ class MessagesPage(QWidget):
             lambda selected_channel: self.on_channel_selected(selected_channel, self.messages_updated_signal))
 
         for channel_id, widget in channel_widgets.items():
-            main_layout.addWidget(widget, 3)
+            splitter.addWidget(widget)
             widget.setVisible(False)
 
-        main_layout.addWidget(channels_list_widget, 1)  # Channels list takes less space
+        splitter.addWidget(channels_list_widget)  # Channels list takes less space
 
         self.channel_widgets = channel_widgets
 
         if channels:
             self.show_channel(channels[0])
+        # add thread sidebar
+        # for now add test data here
+        thread_sidebar = ThreadSidebar([{"text": "Thread 1", "user": MockUser("UJIWHAd").typical_response.get("user"), "is_last": False}, {"text": "Thread 2", "user": MockUser("HUAUHH!@34").typical_response.get("user"), "is_last": True}])
+        splitter.addWidget(thread_sidebar)
 
     def on_channel_selected(self, item: QListWidgetItem, messages_updated_signal):
         channel = item.data(Qt.ItemDataRole.UserRole)
