@@ -68,4 +68,4 @@ class MessagesUpdatedSignal(QObject):
         print(f"Updating messages for channel {channel_id}")
         print(channel_messages)
 
-        await render_messages(self.slack_client, self.runner, text_browser, channel_messages)
+        await render_messages(self.slack_client, text_browser, channel_messages)

@@ -2,10 +2,11 @@ import io
 import os
 import threading
 from functools import partial
-from typing import Any
+from typing import Any, List
 
 import requests
 from PIL import Image
+from PySide6.QtWidgets import QTextBrowser
 from qt_async_threads import QtAsyncRunner
 from slack_sdk import WebClient
 
@@ -30,8 +31,8 @@ async def fetch_image(self, url: str):
     return image.content
 
 
-async def render_messages(slack_client: WebClient, runner: QtAsyncRunner, text_browser, channel_messages):
-    """Given a list of messages, a Slack API Client, an asynchronous runner and a text browser, render messages in a
+async def render_messages(slack_client: WebClient, text_browser: QTextBrowser, channel_messages: List[dict]) -> None:
+    """Given a list of messages, a Slack API Client and a text browser, render messages in a
     text browser. This is different from the `write` method in the `Message` class, as it also fetches user
     information and profile pictures.
     """
@@ -90,6 +91,7 @@ async def render_messages(slack_client: WebClient, runner: QtAsyncRunner, text_b
                 image_tasks: list[partial | Any] = [partial(fetch_image, user["profile"][f"image_{res}"])]
 
             images = []
+            runner = QtAsyncRunner()
             async for image in runner.run_parallel(image_tasks):
                 images.append(await image)
 

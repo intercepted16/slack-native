@@ -1,4 +1,5 @@
 import sys
+from functools import partial
 from typing import List
 
 import darkdetect
@@ -48,14 +49,18 @@ class MainWindow(QMainWindow):
             print(e)
             channels = []
 
-        messages_page = MessagesPage(slack_client, self.messages_manager, channels)
-
         # TODO: add actual pages instead of QLabel placeholders
+        runner = QtAsyncRunner()
+
+        async def on_messages_click(messages_page: MessagesPage):
+            await messages_page.init()
+
         self.buttons = [
-            (QPushButton("Home"), QLabel("Home Page")),
-            (QPushButton("Messages"), messages_page),
-            (QPushButton("Profile"), QLabel("Profile Page")),
-            (QPushButton("Settings"), QLabel("Settings Page")),
+            (QPushButton("Home"), partial(QLabel, "Home Page"), None),
+            (QPushButton("Messages"), partial(MessagesPage, slack_client, self.messages_manager, channels),
+             runner.to_sync(on_messages_click)),
+            (QPushButton("Profile"), partial(QLabel, "Profile Page"), None),
+            (QPushButton("Settings"), partial(QLabel, "Settings Page"), None),
         ]
 
         self.sidebar = SideBar(self.buttons)
@@ -75,7 +80,7 @@ class MainWindow(QMainWindow):
         window_height = self.height()
         font_size = window_height // 40  # Change the divisor to adjust the scaling factor
 
-        for i, (button, _) in enumerate(self.buttons):
+        for i, (button, _, _) in enumerate(self.buttons):
             font = button.font()
             font.setPointSize(font_size)
             button.setFont(font)

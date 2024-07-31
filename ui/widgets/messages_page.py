@@ -14,15 +14,19 @@ from ui.widgets.messages_browser import MessagesBrowser
 
 
 class ThreadSidebar(QWidget):
-    def __init__(self, slack_client, runner: QtAsyncRunner, messages: List[dict] = None):
+    def __init__(self, slack_client: WebClient, messages: List[dict] = None):
         super().__init__()
         self.text_browser = QTextBrowser()
+        self.slack_client = slack_client
+        self.messages = messages
         if messages is None:
-            messages = []
-        render_messages()
+            self.messages = []
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("Threads"))
         layout.addWidget(self.text_browser)
+
+    async def init(self):
+        await render_messages(self.slack_client, self.text_browser, self.messages)
 
 
 class MessagesPage(QWidget):
@@ -33,6 +37,38 @@ class MessagesPage(QWidget):
         self.messages_updated_signal = messages_updated_signal
         self.slack_client = slack_client
         self.selected_channel = None
+        self.channels = channels
+
+    def on_channel_selected(self, item: QListWidgetItem, messages_updated_signal):
+        channel = item.data(Qt.ItemDataRole.UserRole)
+        print(f"Channel selected: {channel['name']}")
+
+        if self.selected_channel == channel["id"]:
+            print("Channel already selected")
+            return
+
+        self.show_channel(channel)
+
+        channel_messages = fetch_messages(self.slack_client, channel["id"])
+        messages_updated_signal.messages_updated.emit(self, channel, channel_messages)
+
+    def show_channel(self, channel: dict):
+        channel_widgets = self.channel_widgets
+        print("channel_widgets", channel_widgets)
+        # Hide the previously selected channel's messages widget
+        if channel_widgets:
+            if self.selected_channel in channel_widgets:
+                channel_widgets[self.selected_channel].setVisible(False)
+
+        # Reassign the selected channel
+        self.selected_channel = channel["id"]
+
+        # Show the selected channel's messages widget
+        if channel:
+            channel_widgets[channel["id"]].setVisible(True)
+
+    async def init(self):
+        channels = self.channels
         if channels is None:
             channels = []
 
@@ -69,33 +105,9 @@ class MessagesPage(QWidget):
             self.show_channel(channels[0])
         # add thread sidebar
         # for now add test data here
-        thread_sidebar = ThreadSidebar([{"text": "Thread 1", "user": MockUser("UJIWHAd").typical_response.get("user"), "is_last": False}, {"text": "Thread 2", "user": MockUser("HUAUHH!@34").typical_response.get("user"), "is_last": True}])
+        thread_sidebar = ThreadSidebar(
+            self.slack_client,
+            [{"text": "Thread 1", "user": MockUser("UJIWHAd").typical_response.get("user"), "is_last": False},
+             {"text": "Thread 2", "user": MockUser("HUAUHH!@34").typical_response.get("user"), "is_last": True}])
+        await thread_sidebar.init()
         splitter.addWidget(thread_sidebar)
-
-    def on_channel_selected(self, item: QListWidgetItem, messages_updated_signal):
-        channel = item.data(Qt.ItemDataRole.UserRole)
-        print(f"Channel selected: {channel['name']}")
-
-        if self.selected_channel == channel["id"]:
-            print("Channel already selected")
-            return
-
-        self.show_channel(channel)
-
-        channel_messages = fetch_messages(self.slack_client, channel["id"])
-        messages_updated_signal.messages_updated.emit(self, channel, channel_messages)
-
-    def show_channel(self, channel: dict):
-        channel_widgets = self.channel_widgets
-        print("channel_widgets", channel_widgets)
-        # Hide the previously selected channel's messages widget
-        if channel_widgets:
-            if self.selected_channel in channel_widgets:
-                channel_widgets[self.selected_channel].setVisible(False)
-
-        # Reassign the selected channel
-        self.selected_channel = channel["id"]
-
-        # Show the selected channel's messages widget
-        if channel:
-            channel_widgets[channel["id"]].setVisible(True)
