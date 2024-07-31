@@ -15,6 +15,7 @@ async def on_button_click(contentStack: QStackedWidget, i, widget_resolver: call
         await func(widget)
     else:
         func(widget)
+    contentStack.addWidget(widget)
     contentStack.setCurrentIndex(i)
 
 
@@ -29,9 +30,7 @@ class SideBar(QWidget):
         self.runner = QtAsyncRunner()
 
         for i, (button, widget_resolver, func) in enumerate(self.buttons):
-            # self.contentStack.addWidget(func)
             self.layout.addWidget(button)
-            # add_to_sidebar(self.contentStack, func)
             button.clicked.connect(
                 partial(self.runner.to_sync(on_button_click), self.contentStack, i, widget_resolver, func))
 
