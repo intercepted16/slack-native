@@ -15,7 +15,8 @@ from users.cache import get_cached_users, cache_profile_pictures
 from users.info import fetch_user_info
 
 
-async def fetch_image(self, url: str):
+async def fetch_image(url: str):
+    runner = QtAsyncRunner()
     if os.environ.get("DEV"):
         # In development mode, the image is not 48 x 48, so we need to resize it
         img = Image.open(url)
@@ -24,7 +25,7 @@ async def fetch_image(self, url: str):
         new_img.save(bytes_io, format="PNG")
         return bytes_io.getvalue()
 
-    image = await self.runner.run(
+    image = await runner.run(
         requests.get, url
     )
     image.raise_for_status()
