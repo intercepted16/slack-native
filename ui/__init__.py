@@ -9,13 +9,14 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QStyleFactory, QLabel, 
 from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QWidget
 from qt_async_threads import QtAsyncRunner
-from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
+from request_interceptor import inject
 from signals import MessagesUpdatedSignal
 from ui.widgets.messages_page import MessagesPage
 from ui.widgets.sidebar import SideBar
 from ui.widgets.tray import Tray
+from mock_client import SlackClientWrapper as WebClient
 
 # Keyring is cross-platform, e.g: on Windows, it uses the Windows Credential Manager
 slack_token = keyring.get_password("slack_native", "access_token")
@@ -108,6 +109,7 @@ class ThemeManager:
 
 
 def main(show_window_signal):
+    inject()
     messages_manager = MessagesUpdatedSignal(slack_client, QtAsyncRunner())
     app = QApplication(sys.argv)
 

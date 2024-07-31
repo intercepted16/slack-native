@@ -22,7 +22,6 @@ if __name__ == '__main__':
         if response.status_code != 200:
             print("Error bringing the existing window to the front")
         exit(0)
-    request_interceptor.inject()
     app, window, messages_manager = main(show_window_signal)
 
     flask_thread = threading.Thread(target=flask_app, args=[messages_manager, show_window_signal])
