@@ -62,8 +62,6 @@ class MessagesUpdatedSignal(QObject):
         # clear the text browser
         text_browser.clear()
 
-        messages_page.show_channel(channel)
-
         # Log the channel update
         print(f"Updating messages for channel {channel_id}")
         print(channel_messages)

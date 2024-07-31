@@ -5,6 +5,7 @@ import requests
 from signals import ShowWindowSignal
 import socket
 import request_interceptor
+import faulthandler
 
 
 def instance_running():
@@ -13,6 +14,7 @@ def instance_running():
 
 
 if __name__ == '__main__':
+    faulthandler.enable()
     show_window_signal = ShowWindowSignal()
 
     if instance_running():

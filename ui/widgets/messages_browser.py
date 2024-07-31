@@ -18,17 +18,14 @@ class MessagesBrowser(QWidget):
     def __init__(self, channel: dict, slack_client: WebClient):
         super().__init__()
         self.slack_client = slack_client
+        self.text_browser = TextBrowser()
 
         scroll_layout = QVBoxLayout(self)
 
-        scroll_widget = TextBrowser()
-        scroll_widget.setOpenExternalLinks(True)
+        text_browser = self.text_browser
+        text_browser.setOpenExternalLinks(True)
 
-        label = QLabel(f"Messages for {channel['name']}")
-        label.setFont(QFont("Arial", 20))
-        label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-        scroll_layout.addWidget(label)
-        scroll_layout.addWidget(scroll_widget)
+        scroll_layout.addWidget(text_browser)
         message_input = QLineEdit()
 
         message_input.returnPressed.connect(
