@@ -10,9 +10,25 @@ from request_interceptor import inject
 
 
 # Create the wrapper class
+def dev_mode_decorator(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        if os.getenv('DEV') == 'true':
+            inject()
+            try:
+                return func(*args, **kwargs)
+            finally:
+                httpretty.disable()
+                httpretty.reset()
+        else:
+            return func(*args, **kwargs)
+
+    return wrapper
+
+
 class SlackClientWrapper(WebClient):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, token: str, *args, **kwargs):
+        super().__init__(token, *args, **kwargs)
         self._apply_decorators()
 
     def _apply_decorators(self):
@@ -21,7 +37,7 @@ class SlackClientWrapper(WebClient):
             if not method_name.startswith('_') and method_name in webclient_methods:
                 method = getattr(self, method_name)
                 if callable(method):
-                    decorated_method = self.dev_mode_decorator(method)
+                    decorated_method = dev_mode_decorator(method)
                     setattr(self, method_name, decorated_method)
                     print(f"Decorated {method_name}")
                     if method_name == "users_conversations":
@@ -30,18 +46,3 @@ class SlackClientWrapper(WebClient):
     def __getattr__(self, name):
         # Delegate attribute access to the wrapped client
         return getattr(self, name)
-
-    def dev_mode_decorator(self, func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            if os.getenv('DEV') == 'true':
-                inject()
-                try:
-                    return func(*args, **kwargs)
-                finally:
-                    httpretty.disable()
-                    httpretty.reset()
-            else:
-                return func(*args, **kwargs)
-
-        return wrapper

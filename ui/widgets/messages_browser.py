@@ -1,7 +1,8 @@
+import math
 from functools import partial
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit
+from PySide6.QtGui import QFont, QWheelEvent, QPalette
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit, QTextBrowser, QPushButton, QScrollArea
 
 from messages.send import send_message
 from ui.widgets.text_browser import TextBrowser
@@ -18,17 +19,17 @@ class MessagesBrowser(QWidget):
     def __init__(self, channel: dict, slack_client: WebClient):
         super().__init__()
         self.slack_client = slack_client
+        message_widget = QWidget()
+        message_widget.setLayout(QVBoxLayout())
+        messages_browser = QScrollArea()
+        self.messages_browser = messages_browser
+        messages_browser.setWidgetResizable(True)
+        messages_browser.setWidget(message_widget)
 
         scroll_layout = QVBoxLayout(self)
+        self.scroll_layout = scroll_layout
+        scroll_layout.addWidget(messages_browser)
 
-        scroll_widget = TextBrowser()
-        scroll_widget.setOpenExternalLinks(True)
-
-        label = QLabel(f"Messages for {channel['name']}")
-        label.setFont(QFont("Arial", 20))
-        label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-        scroll_layout.addWidget(label)
-        scroll_layout.addWidget(scroll_widget)
         message_input = QLineEdit()
 
         message_input.returnPressed.connect(
