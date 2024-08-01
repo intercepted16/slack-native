@@ -1,7 +1,8 @@
 import inspect
 from functools import partial
 from typing import List, Union
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLabel, QStackedWidget
+
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QStackedWidget
 from qt_async_threads import QtAsyncRunner
 
 
@@ -18,7 +19,7 @@ async def on_button_click(contentStack: QStackedWidget, i, widget_resolver: call
             func(widget)
     else:
         print("No function to run")
-    contentStack.addWidget(widget)
+    contentStack.insertWidget(i, widget)
     contentStack.setCurrentIndex(i)
 
 
