@@ -45,8 +45,7 @@ class ChannelsList:
 
         runner = QtAsyncRunner()
         channels_list_widget.itemPressed.connect(
-             runner.to_sync(partial(self.on_channel_selected, self.selected_channel)))
-
+            lambda item: runner.to_sync(self.on_channel_selected)(item))
         for channel_id, widget in channel_widgets.items():
             widget.setVisible(False)
 
@@ -61,6 +60,7 @@ class ChannelsList:
         self.show_channel(channel)
 
         channel_messages = await fetch_messages(self.slack_client, channel["id"])
+        print(f"Channel messages: {channel_messages}")
         self.messages_updated_signal.messages_updated.emit(self.messages_page, channel, channel_messages)
 
     def show_channel(self, channel: dict):

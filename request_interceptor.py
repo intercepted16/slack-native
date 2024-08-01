@@ -162,7 +162,7 @@ class MockConversationsHistory:
                     "type": "message",
                     "user": "U123ABC456",
                     "ts": "1512104434.000490",
-                    "thread_ts": "1512085950.000216",
+                    "thread_ts": "1512104434.0004900",
                     "text": "Guys, how are you doing?"
                 }
             ],

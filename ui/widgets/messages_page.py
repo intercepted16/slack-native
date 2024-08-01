@@ -73,9 +73,9 @@ class MessagesPage(QWidget):
             channels.show_channel(channels.channels[0])
         # add thread sidebar
         # for now add test data here
-        thread_sidebar = ThreadSidebar(
-            self.slack_client,
-            channels.channels[0],
-            await fetch_messages(self.slack_client, channels.channels[0]["id"]))
-        await thread_sidebar.init()
-        splitter.addWidget(thread_sidebar)
+        # thread_sidebar = ThreadSidebar(
+        #     self.slack_client,
+        #     channels.channels[0],
+        #     await fetch_messages(self.slack_client, channels.channels[0]["id"]))
+        # await thread_sidebar.init()
+        # splitter.addWidget(thread_sidebar)

@@ -24,15 +24,23 @@ async def apply_additional_properties(slack_client: WebClient, channel_messages:
 
         message["text"] = parse_message(message["text"])
 
-        # If it is a message with replies (message is a thread), fetch the replies
-        if "thread_ts" in message:
+        # If it is a  *parent* message with replies (message is a thread), fetch the replies
+        if "thread_ts" in message and message["thread_ts"] == message["ts"]:
             print("Fetching replies for message", message["ts"])
             replies = await runner.run(
                 slack_client.conversations_replies,
                 channel=message["channel"],
                 ts=message["ts"]
             )
-            message["replies"] = replies["messages"]
+            # apply the one needed additional property here
+            for reply in replies["messages"]:
+                reply["channel"] = message["channel"]
+            # apply additional properties to the replies
+            # apply the only one needed additional property here
+            for reply in replies["messages"]:
+                reply["channel"] = message["channel"]
+            if "messages" in replies and len(replies["messages"]) > 0:
+                message["replies"] = await apply_additional_properties(slack_client, replies["messages"])
 
         cached_users = get_cached_users()
         if not cached_users:
@@ -45,6 +53,7 @@ async def apply_additional_properties(slack_client: WebClient, channel_messages:
         if cached_user:
             print(f"User found in cache: (ID: {message["user"]})")
             message["user"] = cached_user
+            print("User ftched", message)
             # await Message.write(slack_client, text_browser.textCursor(), channel_messages)
             continue
         elif message["user"] not in users_pending_cache:
@@ -84,6 +93,7 @@ async def apply_additional_properties(slack_client: WebClient, channel_messages:
 
             users_pending_cache[message["user"]] = message["user"]
             users_pending_cache[message["user"]]["lock"] = threading.Lock()
+        print("User ftched", message)
 
         # await Message.write(text_browser.textCursor(), channel_messages)
 
@@ -92,6 +102,7 @@ async def apply_additional_properties(slack_client: WebClient, channel_messages:
         io_thread = threading.Thread(target=cache_profile_pictures,
                                      args=(users_pending_cache,))
         io_thread.start()
+    return channel_messages
 
 
 async def fetch_messages(slack_client: WebClient, channel_id: str):
@@ -104,7 +115,7 @@ async def fetch_messages(slack_client: WebClient, channel_id: str):
         for message in channel_messages:
             # only apply one additional property here; it's required in that func
             message["channel"] = channel_id
-        await apply_additional_properties(slack_client, channel_messages)
+        channel_messages = await apply_additional_properties(slack_client, channel_messages)
 
         return channel_messages
     except SlackApiError as e:

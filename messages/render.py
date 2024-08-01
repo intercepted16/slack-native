@@ -38,5 +38,5 @@ async def render_messages(slack_client: WebClient, text_browser: QTextBrowser, c
     information and profile pictures.
     """
     for message in channel_messages:
-        await Message.write(slack_client, text_browser.textCursor(), message)
+        await Message.write(slack_client, text_browser, message)
 
