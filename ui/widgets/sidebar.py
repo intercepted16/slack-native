@@ -11,10 +11,13 @@ async def on_button_click(contentStack: QStackedWidget, i, widget_resolver: call
         widget = await widget_resolver()
     else:
         widget = widget_resolver()
-    if inspect.iscoroutinefunction(func):
-        await func(widget)
+    if inspect.isfunction(func):
+        if inspect.iscoroutinefunction(func):
+            await func(widget)
+        else:
+            func(widget)
     else:
-        func(widget)
+        print("No function to run")
     contentStack.addWidget(widget)
     contentStack.setCurrentIndex(i)
 
