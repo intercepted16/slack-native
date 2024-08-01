@@ -1,5 +1,5 @@
 from PySide6.QtGui import QTextCharFormat, QFont, QTextCursor
-from PySide6.QtWidgets import QPushButton, QTextBrowser
+from PySide6.QtWidgets import QPushButton, QTextBrowser, QLabel
 from qt_async_threads import QtAsyncRunner
 from slack_sdk import WebClient
 
@@ -11,6 +11,7 @@ from utils.image_processing import RoundedImage
 class Message:
     @staticmethod
     async def write(slack_client: WebClient, text_browser: QTextBrowser, message: dict):
+        buttons = []
         cur = text_browser.textCursor()
         cur.movePosition(QTextCursor.MoveOperation.End)
         data_url = message["user"]["profile"]["image_48"]
@@ -36,21 +37,23 @@ class Message:
             print("Parent message with replies")
             cur.insertHtml("<br>")
             button = QPushButton("Show replies")
-            dont_garbage_collect = DontGarbageCollect()
-            dont_garbage_collect.add(button)
-            # self.buttons.append(button)  # Keep a reference to prevent garbage collection
+            button.size = 20
+            button.setParent(text_browser)
+            cursor_rect = text_browser.cursorRect().bottomLeft()
 
-            cursor_rect = text_browser.cursorRect()
-            button.move(cursor_rect.bottomLeft())
+            button.move(cursor_rect)
             button.show()
+            buttons.append(button)  # Keep a reference to prevent garbage collection
+
+
 
         # if it's a message with replies (message is a thread), render the replies
-        if "replies" in message:
-            print("Replies in message")
-            for reply in message["replies"]:
-                cur.insertHtml("<br>")
+        # if "replies" in message:
+        #     print("Replies in message")
+        #     for reply in message["replies"]:
+        #         cur.insertHtml("<br>")
                 # apply additional properties to the reply
-                await Message.write(slack_client, text_browser, reply)
+                # await Message.write(slack_client, text_browser, reply)
         # if it's the last message, add less space
         if message["is_last"]:
             cur.insertHtml("<br>")

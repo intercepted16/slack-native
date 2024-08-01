@@ -35,3 +35,4 @@ class TextBrowser(QTextBrowser):
         text_format.setFontPointSize(self.default_font_size)
         cursor.mergeCharFormat(text_format)
         self.mergeCurrentCharFormat(text_format)
+

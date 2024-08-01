@@ -55,8 +55,8 @@ class MessagesUpdatedSignal(QObject):
         channel_id = channel["id"]
         channel_widgets = messages_page.channel_widgets
         print(f"Channel widgets: {channel_widgets}")
-        messages_widget = channel_widgets[channel_id]
-        text_browser = messages_widget.findChild(QTextBrowser)
+        message_widgets = channel_widgets[channel_id]
+        text_browser = message_widgets.findChild(QTextBrowser)
         print(f"Text browser: {text_browser}")
 
         # clear the text browser

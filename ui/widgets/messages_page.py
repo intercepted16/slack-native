@@ -55,7 +55,6 @@ class MessagesPage(QWidget):
         splitter = QSplitter(Qt.Orientation.Horizontal)
         main_layout.addWidget(splitter)
 
-
         channels = ChannelsList(self.slack_client, channels, self.messages_updated_signal, self)
 
         for channel in channels.channels:

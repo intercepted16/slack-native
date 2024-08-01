@@ -39,4 +39,3 @@ async def render_messages(slack_client: WebClient, text_browser: QTextBrowser, c
     """
     for message in channel_messages:
         await Message.write(slack_client, text_browser, message)
-
