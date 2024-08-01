@@ -1,11 +1,14 @@
 from PySide6.QtGui import QTextCharFormat, QFont, QTextCursor
+from qt_async_threads import QtAsyncRunner
+from slack_sdk import WebClient
 
+from users.info import fetch_user_info
 from utils.image_processing import RoundedImage
 
 
 class Message:
     @staticmethod
-    def write(cur: QTextCursor, message: dict):
+    async def write(slack_client: WebClient, cur: QTextCursor, message: dict):
         cur.movePosition(QTextCursor.MoveOperation.End)
 
         data_url = message["user"]["profile"]["image_48"]
@@ -21,6 +24,15 @@ class Message:
 
         text_format = "font-size: 18px;"
         cur.insertHtml(f"<p style=\"{text_format}\">{message['text']}</p>\n")
+
+        # if it's a message with replies (message is a thread), render the replies
+        if "replies" in message:
+            print("Replies in message")
+            # runner = QtAsyncRunner()
+            for reply in message["replies"]:
+                cur.insertHtml("<br>")
+
+                await Message.write(slack_client, cur, reply)
         # if it's the last message, add less space
         if message["is_last"]:
             cur.insertHtml("<br>")

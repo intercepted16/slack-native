@@ -1,8 +1,10 @@
+from functools import partial
 from typing import List
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QListWidget, QListWidgetItem, QWidget, QVBoxLayout, QLabel
+from qt_async_threads import QtAsyncRunner
 from slack_sdk import WebClient
 
 from messages.fetch import fetch_messages
@@ -41,15 +43,14 @@ class ChannelsList:
 
                 channel_widgets[channel["id"]] = widget
 
-
-
+        runner = QtAsyncRunner()
         channels_list_widget.itemPressed.connect(
-            lambda selected_channel: self.on_channel_selected(selected_channel))
+             runner.to_sync(partial(self.on_channel_selected, self.selected_channel)))
 
         for channel_id, widget in channel_widgets.items():
             widget.setVisible(False)
 
-    def on_channel_selected(self, item: QListWidgetItem):
+    async def on_channel_selected(self, item: QListWidgetItem):
         channel = item.data(Qt.ItemDataRole.UserRole)
         print(f"Channel selected: {channel['name']}")
 
@@ -59,7 +60,7 @@ class ChannelsList:
 
         self.show_channel(channel)
 
-        channel_messages = fetch_messages(self.slack_client, channel["id"])
+        channel_messages = await fetch_messages(self.slack_client, channel["id"])
         self.messages_updated_signal.messages_updated.emit(self.messages_page, channel, channel_messages)
 
     def show_channel(self, channel: dict):
@@ -76,7 +77,3 @@ class ChannelsList:
         # Show the selected channel's messages widget
         if channel:
             channel_widgets[channel["id"]].setVisible(True)
-
-
-
-

@@ -157,6 +157,13 @@ class MockConversationsHistory:
                     "user": "U222BBB222",
                     "text": "Hi! How are you?",
                     "ts": "1512104434.000490"
+                },
+                {
+                    "type": "message",
+                    "user": "U123ABC456",
+                    "ts": "1512104434.000490",
+                    "thread_ts": "1512085950.000216",
+                    "text": "Guys, how are you doing?"
                 }
             ],
             "has_more": True,
@@ -164,6 +171,51 @@ class MockConversationsHistory:
             "response_metadata": {
                 "next_cursor": "bmV4dF90czoxNTEyMDg1ODYxMDAwNTQz"
             }
+        }
+
+
+class MockConversationsReplies:
+    def __init__(self):
+        self.typical_response = {
+            "ok": True,
+            "messages": [
+                {
+                    "type": "message",
+                    "user": "U123ABC456",
+                    "text": "Was there was there was there what was there was there what was there was there there was there.",
+                    "thread_ts": "1482960137.003543",
+                    "reply_count": 3,
+                    "replies": [
+                        {
+                            "user": "U123ABC456",
+                            "ts": "1483037603.017503"
+                        },
+                        {
+                            "user": "U123ABC456",
+                            "ts": "1483051909.018632"
+                        },
+                        {
+                            "user": "U123ABC456",
+                            "ts": "1483125339.020269"
+                        }
+                    ],
+                    "reply_users": ["U123ABC456", "U123ABC456", "U123ABC456"],
+                    "reply_users_count": 3,
+                    "latest_reply": "1483125339.020269",
+                    "subscribed": True,
+                    "last_read": "1484678597.521003",
+                    "unread_count": 0,
+                    "ts": "1482960137.003543"
+                },
+                {
+                    "type": "message",
+                    "user": "U123ABC456",
+                    "text": "Hello!",
+                    "thread_ts": "1512085950.000216",
+                    "ts": "1512085950.000216",
+                    "parent_user_id": "U456XYZ789"
+                },
+            ]
         }
 
 
@@ -181,6 +233,13 @@ def conversations_history(request, uri, response_headers):
         return [200, response_headers, json.dumps(MockConversationsHistory().typical_response)]
 
 
+def conversations_replies(request, uri, response_headers):
+    if not request.headers.get("Authorization"):
+        return [200, response_headers, json.dumps({"ok": False, "error": "not_authed"})]
+    else:
+        return [200, response_headers, json.dumps(MockConversationsReplies().typical_response)]
+
+
 def inject():
     httpretty.enable(verbose=True,
                      allow_net_connect=True)  # enable HTTPretty so that it will monkey patch the socket module
@@ -188,6 +247,7 @@ def inject():
                            body=users_info)
     httpretty.register_uri(httpretty.POST, "https://slack.com/api/users.conversations", body=user_conversations)
     httpretty.register_uri(httpretty.POST, "https://slack.com/api/conversations.history", body=conversations_history)
+    httpretty.register_uri(httpretty.POST, "https://slack.com/api/conversations.replies", body=conversations_replies)
     # do not disable if in DEV mode, we want to mock still
     # httpretty.disable()  # disable afterwards, so that you will have no problems in code that uses that socket module
     # httpretty.reset()    # reset HTTPretty state (clean up registered urls and request history)
