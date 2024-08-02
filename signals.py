@@ -8,7 +8,7 @@ import requests
 from PIL import Image
 
 from PySide6.QtCore import QObject, Signal
-from PySide6.QtWidgets import QWidget, QTextBrowser
+from PySide6.QtWidgets import QWidget, QTextBrowser, QScrollArea
 from qt_async_threads import QtAsyncRunner
 from slack_sdk.web import WebClient
 
@@ -55,15 +55,10 @@ class MessagesUpdatedSignal(QObject):
         channel_id = channel["id"]
         channel_widgets = messages_page.channel_widgets
         print(f"Channel widgets: {channel_widgets}")
-        message_widgets = channel_widgets[channel_id]
-        text_browser = message_widgets.findChild(QTextBrowser)
-        print(f"Text browser: {text_browser}")
-
-        # clear the text browser
-        text_browser.clear()
-
+        message_widget: QWidget = channel_widgets[channel_id]
+        message_scroll_area: QScrollArea = message_widget.findChild(QScrollArea)
         # Log the channel update
         print(f"Updating messages for channel {channel_id}")
         print(channel_messages)
 
-        await render_messages(self.slack_client, text_browser, channel_messages)
+        await render_messages(self.slack_client, message_scroll_area, channel_messages)

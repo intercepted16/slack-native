@@ -3,7 +3,7 @@ from typing import List
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
-from PySide6.QtWidgets import QListWidget, QListWidgetItem, QWidget, QVBoxLayout, QLabel
+from PySide6.QtWidgets import QListWidget, QListWidgetItem, QWidget, QVBoxLayout, QLabel, QScrollArea
 from qt_async_threads import QtAsyncRunner
 from slack_sdk import WebClient
 
@@ -38,7 +38,13 @@ class ChannelsList:
                 label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
                 layout.addWidget(label)
 
-                messages_browser = MessagesBrowser(channel, self.slack_client)
+                # messages_browser = MessagesBrowser(channel, self.slack_client)
+                # layout.addWidget(messages_browser)
+                message_widget = QWidget()
+                message_widget.setLayout(QVBoxLayout())
+                messages_browser = QScrollArea()
+                messages_browser.setWidgetResizable(True)
+                messages_browser.setWidget(message_widget)
                 layout.addWidget(messages_browser)
 
                 channel_widgets[channel["id"]] = widget

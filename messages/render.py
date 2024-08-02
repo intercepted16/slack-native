@@ -6,7 +6,7 @@ from typing import Any, List
 
 import requests
 from PIL import Image
-from PySide6.QtWidgets import QTextBrowser
+from PySide6.QtWidgets import QTextBrowser, QScrollArea
 from qt_async_threads import QtAsyncRunner
 from slack_sdk import WebClient
 
@@ -32,10 +32,10 @@ async def fetch_image(url: str):
     return image.content
 
 
-async def render_messages(slack_client: WebClient, text_browser: QTextBrowser, channel_messages: List[dict]) -> None:
-    """Given a list of messages, a Slack API Client and a text browser, render messages in a
-    text browser. This is different from the `write` method in the `Message` class, as it also fetches user
+async def render_messages(slack_client: WebClient, scroll_area: QScrollArea, channel_messages: List[dict]) -> None:
+    """Given a list of messages, a Slack API Client, an array of messages` text browsers, render each message in their respective text browser.
+     This is different from the `write` method in the `Message` class, as it also fetches user
     information and profile pictures.
     """
     for message in channel_messages:
-        await Message.write(slack_client, text_browser, message)
+        await Message.write(parent=scroll_area.widget().layout(), message=message)

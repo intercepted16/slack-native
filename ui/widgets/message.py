@@ -1,17 +1,25 @@
 from PySide6.QtGui import QTextCharFormat, QFont, QTextCursor
-from PySide6.QtWidgets import QPushButton, QTextBrowser, QLabel
+from PySide6.QtWidgets import QPushButton, QTextBrowser, QLabel, QScrollArea, QLayout, QWidget, QVBoxLayout
 from qt_async_threads import QtAsyncRunner
 from slack_sdk import WebClient
 
 from messages.fetch import apply_additional_properties
+from ui.widgets.text_browser import TextBrowser
 from users.info import fetch_user_info
 from utils.image_processing import RoundedImage
 
 
 class Message:
     @staticmethod
-    async def write(slack_client: WebClient, text_browser: QTextBrowser, message: dict):
+    async def write(parent: QLayout, message: dict):
         buttons = []
+        message_widget = QWidget()
+        message_layout = QVBoxLayout()
+        message_widget.setLayout(message_layout)
+        text_browser = TextBrowser()
+        message_layout.addWidget(text_browser)
+        # Create a text browser to render the message
+        parent.addWidget(message_widget)
         cur = text_browser.textCursor()
         cur.movePosition(QTextCursor.MoveOperation.End)
         data_url = message["user"]["profile"]["image_48"]
@@ -35,38 +43,14 @@ class Message:
         # if the message is a parent message with replies (message is a thread), display a button to show the replies
         if "thread_ts" in message and float(message["thread_ts"]) == float(message["ts"]):
             print("Parent message with replies")
-            cur.insertHtml("<br>")
             button = QPushButton("Show replies")
             button.size = 20
-            button.setParent(text_browser)
-            cursor_rect = text_browser.cursorRect().bottomLeft()
+            button.setParent(message_widget)
+            message_layout.addWidget(button)
 
-            button.move(cursor_rect)
-            button.show()
             buttons.append(button)  # Keep a reference to prevent garbage collection
 
-
-
-        # if it's a message with replies (message is a thread), render the replies
-        # if "replies" in message:
-        #     print("Replies in message")
-        #     for reply in message["replies"]:
-        #         cur.insertHtml("<br>")
-                # apply additional properties to the reply
-                # await Message.write(slack_client, text_browser, reply)
-        # if it's the last message, add less space
         if message["is_last"]:
             cur.insertHtml("<br>")
         else:
             cur.insertHtml("<br>" * 2)
-
-
-class DontGarbageCollect:
-    def add(self, *args, **kwargs):
-        local_vars = locals()
-        for arg in args:
-            var_name = [name for name, value in local_vars.items() if value == arg]
-            if var_name:
-                self.__setattr__(var_name[0], arg)
-        for key, value in kwargs.items():
-            self.__setattr__(key, value)
