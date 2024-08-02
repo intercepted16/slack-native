@@ -6,6 +6,7 @@ from qt_async_threads import QtAsyncRunner
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 from messages.parse import parse_message
+from ui.widgets.messages_browser import MessagesBrowser
 from users.cache import get_cached_users, cache_profile_pictures
 from users.info import fetch_user_info, fetch_image
 
@@ -36,11 +37,12 @@ async def apply_additional_properties(slack_client: WebClient, channel_messages:
             for reply in replies["messages"]:
                 reply["channel"] = message["channel"]
             # apply additional properties to the replies
-            # apply the only one needed additional property here
-            for reply in replies["messages"]:
-                reply["channel"] = message["channel"]
             if "messages" in replies and len(replies["messages"]) > 0:
                 message["replies"] = await apply_additional_properties(slack_client, replies["messages"])
+
+        # create a text browser for the message
+        message_browser = MessagesBrowser(message["channel"], slack_client)
+        message["text_browser"] = message_browser
 
         cached_users = get_cached_users()
         if not cached_users:
@@ -121,3 +123,19 @@ async def fetch_messages(slack_client: WebClient, channel_id: str):
     except SlackApiError as e:
         print(e.response['error'])
         return []
+
+
+async def fetch_replies(slack_client: WebClient, channel_id: str, thread_ts: str):
+    try:
+        response = slack_client.conversations_replies(channel=channel_id, ts=thread_ts)
+        channel_messages = response.get("messages")
+        # The newest message should be at the bottom, so reverse the list
+        channel_messages = list(reversed(channel_messages))
+        for message in channel_messages:
+            # only apply one additional property here; it's required in that func
+            message["channel"] = channel_id
+        await apply_additional_properties(slack_client, channel_messages)
+    except SlackApiError as e:
+        print(e.response['error'])
+        return []
+    return channel_messages

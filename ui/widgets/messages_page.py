@@ -1,37 +1,11 @@
 from typing import List
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont
-from PySide6.QtWidgets import QListWidgetItem, QWidget, QHBoxLayout, QListWidget, QTextBrowser
-from qt_async_threads import QtAsyncRunner
+from PySide6.QtWidgets import QSplitter
+from PySide6.QtWidgets import QWidget, QHBoxLayout
 from slack_sdk.web import WebClient
-from PySide6.QtWidgets import QVBoxLayout, QLabel, QSplitter
 
-from messages.fetch import fetch_messages
-from messages.render import render_messages
-from request_interceptor import MockUser
 from ui.widgets.channels import ChannelsList
-from ui.widgets.message import Message
-from ui.widgets.messages_browser import MessagesBrowser
-
-
-class ThreadSidebar(QWidget):
-    def __init__(self, slack_client: WebClient, channel: dict, messages: List[dict] = None):
-        super().__init__()
-        self.text_browser = None
-        self.slack_client = slack_client
-        self.messages = messages
-        self.channel = channel
-        self.messages_browser = MessagesBrowser(channel, self.slack_client)
-        self.text_browser = self.messages_browser.text_browser
-        if messages is None:
-            self.messages = []
-        layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Threads"))
-        layout.addWidget(self.messages_browser)
-
-    async def init(self):
-        await render_messages(self.slack_client, self.text_browser, self.messages)
 
 
 class MessagesPage(QWidget):

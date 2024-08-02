@@ -19,17 +19,17 @@ class MessagesBrowser(QWidget):
     def __init__(self, channel: dict, slack_client: WebClient):
         super().__init__()
         self.slack_client = slack_client
-        self.scroll_area = QScrollArea()
-        # self.text_browser = TextBrowser()
+        message_widget = QWidget()
+        message_widget.setLayout(QVBoxLayout())
+        messages_browser = QScrollArea()
+        self.messages_browser = messages_browser
+        messages_browser.setWidgetResizable(True)
+        messages_browser.setWidget(message_widget)
 
         scroll_layout = QVBoxLayout(self)
-        self.scroll_area.setBackgroundRole(QPalette.ColorRole.Mid)
-        scroll_layout.addWidget(self.scroll_area)
+        self.scroll_layout = scroll_layout
+        scroll_layout.addWidget(messages_browser)
 
-        # text_browser = self.text_browser
-        # text_browser.setOpenExternalLinks(True)
-
-        # scroll_layout.addWidget(text_browser)
         message_input = QLineEdit()
 
         message_input.returnPressed.connect(

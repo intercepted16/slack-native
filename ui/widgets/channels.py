@@ -38,13 +38,7 @@ class ChannelsList:
                 label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
                 layout.addWidget(label)
 
-                # messages_browser = MessagesBrowser(channel, self.slack_client)
-                # layout.addWidget(messages_browser)
-                message_widget = QWidget()
-                message_widget.setLayout(QVBoxLayout())
-                messages_browser = QScrollArea()
-                messages_browser.setWidgetResizable(True)
-                messages_browser.setWidget(message_widget)
+                messages_browser = MessagesBrowser(channel, self.slack_client)
                 layout.addWidget(messages_browser)
 
                 channel_widgets[channel["id"]] = widget

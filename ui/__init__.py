@@ -17,11 +17,9 @@ from signals import MessagesUpdatedSignal
 from ui.widgets.messages_page import MessagesPage
 from ui.widgets.sidebar import SideBar
 from ui.widgets.tray import Tray
-from mock_client import SlackClientWrapper as WebClient
+from slack_client import slack_client
 
-# Keyring is cross-platform, e.g: on Windows, it uses the Windows Credential Manager
-slack_token = keyring.get_password("slack_native", "access_token")
-slack_client = WebClient(slack_token)
+
 messages: List[dict] = []
 
 

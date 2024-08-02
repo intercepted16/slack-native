@@ -1,12 +1,24 @@
-from PySide6.QtGui import QTextCharFormat, QFont, QTextCursor
-from PySide6.QtWidgets import QPushButton, QTextBrowser, QLabel, QScrollArea, QLayout, QWidget, QVBoxLayout
-from qt_async_threads import QtAsyncRunner
-from slack_sdk import WebClient
+from functools import partial
 
-from messages.fetch import apply_additional_properties
+from PySide6.QtGui import QTextCharFormat, QFont, QTextCursor
+from PySide6.QtWidgets import QPushButton, QLayout, QWidget, QVBoxLayout
+from qt_async_threads import QtAsyncRunner
+
+from messages.fetch import fetch_replies
+from slack_client import slack_client
 from ui.widgets.text_browser import TextBrowser
-from users.info import fetch_user_info
+from ui.widgets.thread_sidebar import ThreadSidebar
 from utils.image_processing import RoundedImage
+
+
+async def show_replies(message: dict):
+    print("Showing replies")
+    replies_widget = ThreadSidebar(message["channel"],
+                                   await fetch_replies(slack_client, message["channel"], message["ts"]))
+    await replies_widget.init()
+    replies = await fetch_replies(slack_client, message["channel"], message["ts"])
+    replies_widget.thread_sidebar_updated.thread_sidebar_updated.emit(replies)
+
 
 
 class Message:
@@ -46,11 +58,9 @@ class Message:
             button = QPushButton("Show replies")
             button.size = 20
             button.setParent(message_widget)
+
+            runner = QtAsyncRunner()
+            button.clicked.connect(partial(runner.to_sync(show_replies), message))
             message_layout.addWidget(button)
 
             buttons.append(button)  # Keep a reference to prevent garbage collection
-
-        if message["is_last"]:
-            cur.insertHtml("<br>")
-        else:
-            cur.insertHtml("<br>" * 2)

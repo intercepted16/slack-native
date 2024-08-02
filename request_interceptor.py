@@ -182,36 +182,7 @@ class MockConversationsReplies:
                 {
                     "type": "message",
                     "user": "U123ABC456",
-                    "text": "Was there was there was there what was there was there what was there was there there was there.",
-                    "thread_ts": "1482960137.003543",
-                    "reply_count": 3,
-                    "replies": [
-                        {
-                            "user": "U123ABC456",
-                            "ts": "1483037603.017503"
-                        },
-                        {
-                            "user": "U123ABC456",
-                            "ts": "1483051909.018632"
-                        },
-                        {
-                            "user": "U123ABC456",
-                            "ts": "1483125339.020269"
-                        }
-                    ],
-                    "reply_users": ["U123ABC456", "U123ABC456", "U123ABC456"],
-                    "reply_users_count": 3,
-                    "latest_reply": "1483125339.020269",
-                    "subscribed": True,
-                    "last_read": "1484678597.521003",
-                    "unread_count": 0,
-                    "ts": "1482960137.003543"
-                },
-                {
-                    "type": "message",
-                    "user": "U123ABC456",
                     "text": "Hello!",
-                    "thread_ts": "1512085950.000216",
                     "ts": "1512085950.000216",
                     "parent_user_id": "U456XYZ789"
                 },
