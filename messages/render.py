@@ -14,4 +14,4 @@ async def render_messages(scroll_area: QScrollArea, channel_messages: List[dict]
     for i in reversed(range(scroll_area.widget().layout().count())):
         scroll_area.widget().layout().itemAt(i).widget().deleteLater()
     for message in channel_messages:
-        await Message.write(parent=scroll_area.widget().layout(), message=message)
+        await Message.write(scroll_area, message=message)

@@ -1,7 +1,7 @@
 from functools import partial
 
 from PySide6.QtGui import QTextCharFormat, QFont, QTextCursor
-from PySide6.QtWidgets import QPushButton, QLayout, QWidget, QVBoxLayout
+from PySide6.QtWidgets import QPushButton, QLayout, QWidget, QVBoxLayout, QScrollArea
 from qt_async_threads import QtAsyncRunner
 
 from messages.fetch import fetch_replies
@@ -11,11 +11,12 @@ from ui.widgets.thread_sidebar import ThreadSidebar
 from utils.image_processing import RoundedImage
 
 
-async def show_replies(message: dict):
+async def show_replies(message: dict, parent: QWidget):
     print("Showing replies")
-    replies_widget = ThreadSidebar(message["channel"],
-                                   await fetch_replies(slack_client, message["channel"], message["ts"]))
-    await replies_widget.init()
+    if not parent.findChild(ThreadSidebar):
+        replies_widget = ThreadSidebar(message["channel"], parent)
+    else:
+        replies_widget = parent.findChild(ThreadSidebar)
     replies = await fetch_replies(slack_client, message["channel"], message["ts"])
     replies_widget.thread_sidebar_updated.thread_sidebar_updated.emit(replies)
 
@@ -23,7 +24,7 @@ async def show_replies(message: dict):
 
 class Message:
     @staticmethod
-    async def write(parent: QLayout, message: dict):
+    async def write(scroll_area: QScrollArea, message: dict):
         buttons = []
         message_widget = QWidget()
         message_layout = QVBoxLayout()
@@ -31,6 +32,7 @@ class Message:
         text_browser = TextBrowser()
         message_layout.addWidget(text_browser)
         # Create a text browser to render the message
+        parent = scroll_area.widget().layout()
         parent.addWidget(message_widget)
         cur = text_browser.textCursor()
         cur.movePosition(QTextCursor.MoveOperation.End)
@@ -60,7 +62,10 @@ class Message:
             button.setParent(message_widget)
 
             runner = QtAsyncRunner()
-            button.clicked.connect(partial(runner.to_sync(show_replies), message))
+            parent_parent = scroll_area.parent().parent().parent()
+            print("Parent parent", parent_parent)
+            parent_parent.children().append(button)
+            button.clicked.connect(partial(runner.to_sync(show_replies), message, parent_parent))
             message_layout.addWidget(button)
 
             buttons.append(button)  # Keep a reference to prevent garbage collection
