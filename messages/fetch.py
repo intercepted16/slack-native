@@ -11,7 +11,7 @@ from users.cache import get_cached_users, cache_profile_pictures
 from users.info import fetch_user_info, fetch_image
 
 
-async def apply_additional_properties(slack_client: WebClient, channel_messages: List[dict]):
+async def apply_additional_properties(slack_client: WebClient, channel_messages: List[dict], channel_id: str):
     """Apply additional properties to messages, such as the user's profile picture, """
     users_pending_cache = {}
     length = len(channel_messages)
@@ -24,6 +24,7 @@ async def apply_additional_properties(slack_client: WebClient, channel_messages:
             continue
 
         message["text"] = parse_message(message["text"])
+        message["channel"] = channel_id
 
         # If it is a  *parent* message with replies (message is a thread), fetch the replies
         if "thread_ts" in message and message["thread_ts"] == message["ts"]:
@@ -117,7 +118,7 @@ async def fetch_messages(slack_client: WebClient, channel_id: str):
         for message in channel_messages:
             # only apply one additional property here; it's required in that func
             message["channel"] = channel_id
-        channel_messages = await apply_additional_properties(slack_client, channel_messages)
+        channel_messages = await apply_additional_properties(slack_client, channel_messages, channel_id)
 
         return channel_messages
     except SlackApiError as e:
@@ -134,7 +135,7 @@ async def fetch_replies(slack_client: WebClient, channel_id: str, thread_ts: str
         for message in channel_messages:
             # only apply one additional property here; it's required in that func
             message["channel"] = channel_id
-        await apply_additional_properties(slack_client, channel_messages)
+        await apply_additional_properties(slack_client, channel_messages, channel_id)
     except SlackApiError as e:
         print(e.response['error'])
         return []
