@@ -4,7 +4,6 @@ import threading
 import requests
 from signals import ShowWindowSignal
 import socket
-import request_interceptor
 import faulthandler
 
 

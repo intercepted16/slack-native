@@ -31,8 +31,7 @@ class MessagesPage(QWidget):
 
         channels = ChannelsList(self.slack_client, channels, self.messages_updated_signal, self)
 
-        for channel in channels.channels:
-            widget = channels.channel_widgets[channel["id"]]
+        for widget in channels.channel_widgets.values():
             splitter.addWidget(widget)
             widget.setVisible(False)
 

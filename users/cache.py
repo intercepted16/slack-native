@@ -23,10 +23,9 @@ def cache_users(users: dict[str, dict]):
     with open(os.path.join(APP_DATA_DIR, "users.json"), "r") as r:
         print("caching users", users)
         current_users: dict[str, dict] = json.load(r)
-        new_users = current_users
+        new_users = current_users.copy()
         print("caching users and the new users are", new_users)
-        for user in users:
-            new_users[user] = users[user]
+        new_users.update(users)
 
         with open(os.path.join(APP_DATA_DIR, "users.json"), "w") as w:
             print("caching users", new_users)
@@ -34,8 +33,7 @@ def cache_users(users: dict[str, dict]):
 
 
 def cache_profile_pictures(users: dict[str, dict]):
-    for user in users:
-        user = users[user]
+    for user in users.values():
         print("the lock is", user["lock"])
         cache_profile_picture(user, ["48"], [user["profile"]["image_48"]], user["lock"])
 
