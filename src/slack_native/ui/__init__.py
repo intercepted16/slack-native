@@ -1,9 +1,7 @@
-import sys
 from functools import partial
 from typing import List
 
 import darkdetect
-import keyring
 from PySide6.QtGui import QPalette, QColor, QIcon
 from PySide6.QtGui import QResizeEvent
 from PySide6.QtWidgets import QApplication, QMainWindow, QStyleFactory, QLabel, QPushButton
@@ -11,13 +9,13 @@ from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QWidget
 from qt_async_threads import QtAsyncRunner
 from slack_sdk.errors import SlackApiError
+import sys
 
-from request_interceptor import inject
-from signals import MessagesUpdatedSignal
-from ui.widgets.messages_page import MessagesPage
-from ui.widgets.sidebar import SideBar
-from ui.widgets.tray import Tray
-from slack_client import slack_client
+from slack_native.signals import MessagesUpdatedSignal
+from slack_native.ui.widgets.messages_page import MessagesPage
+from slack_native.ui.widgets.sidebar import SideBar
+from slack_native.ui.widgets.tray import Tray
+from slack_native.slack_client import slack_client
 
 
 messages: List[dict] = []
@@ -112,7 +110,6 @@ class ThemeManager:
 
 
 def main(show_window_signal):
-    inject()
     messages_manager = MessagesUpdatedSignal(slack_client, QtAsyncRunner())
     app = QApplication(sys.argv)
 

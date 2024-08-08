@@ -8,10 +8,6 @@ from slack_sdk.web import WebClient
 from messages.render import render_messages
 from ui.widgets.messages_page import MessagesPage
 
-
-
-
-
 class ShowWindowSignal(QObject):
     show_window = Signal()
 
