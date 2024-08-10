@@ -1,15 +1,13 @@
-import math
 from functools import partial
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont, QWheelEvent, QPalette
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit, QTextBrowser, QPushButton, QScrollArea
 
-from messages.send import send_message
-from ui.widgets.text_browser import TextBrowser
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLineEdit, QScrollArea
+from slack_native.messages.send import send_message
 from slack_sdk.web import WebClient
 
 
-def send_message_on_return(slack_client: WebClient, input_element: QLineEdit, channel: dict):
+def send_message_on_return(
+    slack_client: WebClient, input_element: QLineEdit, channel: dict
+):
     text = input_element.text()
     input_element.clear()
     send_message(slack_client, channel["id"], text)
@@ -33,5 +31,6 @@ class MessagesBrowser(QWidget):
         message_input = QLineEdit()
 
         message_input.returnPressed.connect(
-            partial(send_message_on_return, self.slack_client, message_input, channel))
+            partial(send_message_on_return, self.slack_client, message_input, channel)
+        )
         scroll_layout.addWidget(message_input)

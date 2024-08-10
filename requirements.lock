@@ -10,6 +10,8 @@
 #   universal: false
 
 -e file:.
+altgraph==0.17.4
+    # via pyinstaller
 attrs==24.2.0
     # via qt-async-threads
 blinker==1.8.2
@@ -31,6 +33,8 @@ darkdetect==0.8.0
 emoji-data-python==1.6.0
     # via slack-native
 flask==3.0.3
+    # via slack-native
+furl==2.1.3
     # via slack-native
 httpretty==1.1.4
     # via mlack
@@ -55,7 +59,7 @@ keyring==25.3.0
 markupsafe==2.1.5
     # via jinja2
     # via werkzeug
-mlack @ git+https://github.com/intercepted16/mlack.git@3336960d4e3f4747edc300241eca0e7777a31d5d
+mlack @ git+https://github.com/intercepted16/mlack.git@a18b2b1bd510f1182c130deb8bf655c822a9fcc5
     # via slack-native
 more-itertools==10.3.0
     # via jaraco-classes
@@ -63,12 +67,20 @@ more-itertools==10.3.0
 names==0.3.0
     # via mlack
     # via slack-native
+orderedmultidict==1.0.1
+    # via furl
 packaging==24.1
+    # via pyinstaller
+    # via pyinstaller-hooks-contrib
     # via qtpy
 pillow==10.4.0
     # via slack-native
 pycparser==2.22
     # via cffi
+pyinstaller==6.9.0
+    # via slack-native
+pyinstaller-hooks-contrib==2024.7
+    # via pyinstaller
 pyside6==6.7.2
     # via slack-native
 pyside6-addons==6.7.2
@@ -87,10 +99,16 @@ requests==2.32.3
     # via slack-native
 secretstorage==3.3.3
     # via keyring
+setuptools==72.1.0
+    # via pyinstaller
+    # via pyinstaller-hooks-contrib
 shiboken6==6.7.2
     # via pyside6
     # via pyside6-addons
     # via pyside6-essentials
+six==1.16.0
+    # via furl
+    # via orderedmultidict
 slack-sdk==3.31.0
     # via mlack
     # via slack-native

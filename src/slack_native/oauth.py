@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from flask import Flask, redirect, request, jsonify, Request
 import os
 from dotenv import load_dotenv
@@ -7,18 +9,25 @@ from slack_sdk.errors import SlackApiError
 import time
 import hashlib
 import hmac
-from signals import MessagesUpdatedSignal
+
 import keyring
+from furl import furl
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from slack_native.main import App
+
 
 load_dotenv(".env")
 messages = []
-app = Flask(__name__)
+flask = Flask(__name__)
 secret_key = os.environ.get("FLASK_SECRET_KEY")
 
 if secret_key is None:
     raise Exception("FLASK_SECRET_KEY must be set in the environment.")
 else:
-    app.secret_key = secret_key
+    flask.secret_key = secret_key
 
 if bool(os.environ.get("DEV")) is True:
     redirect_uri = os.environ.get("DEV_SLACK_REDIRECT_URI")
@@ -41,46 +50,51 @@ class This:
 this = This()
 
 
-def main(messages_manager: MessagesUpdatedSignal, window):
-    this.messages_manager = messages_manager
-    this.show_window_signal = window
-    app.run(debug=True, use_reloader=False, port=5000)
+def main(app: "App"):
+    this.messages_manager = app.messages_manager
+    this.show_window_signal = app.show_window_signal
+    flask.run(debug=True, use_reloader=False, port=5000)
 
 
 def handle_challenge(req: Request):
     request_json = req.json
     if request_json["challenge"] is not None:
         body = req.get_data()
-        timestamp = req.headers['X-Slack-Request-Timestamp']
+        timestamp = req.headers["X-Slack-Request-Timestamp"]
         if abs(time.time() - float(timestamp)) > 60 * 5:
             # The request timestamp is more than five minutes from local time.
             # It could be a replay attack, so let's ignore it.
             return
-        sig_basestring = 'v0:' + timestamp + ':' + body.decode('utf-8')
-        signature = 'v0=' + hmac.new(os.environ.get("SLACK_SIGNING_SECRET").encode('utf-8'),
-                                     sig_basestring.encode('utf-8'),
-                                     digestmod=hashlib.sha256).hexdigest()
-        slack_signature = req.headers['X-Slack-Signature']
+        sig_basestring = "v0:" + timestamp + ":" + body.decode("utf-8")
+        signature = (
+            "v0="
+            + hmac.new(
+                os.environ.get("SLACK_SIGNING_SECRET").encode("utf-8"),
+                sig_basestring.encode("utf-8"),
+                digestmod=hashlib.sha256,
+            ).hexdigest()
+        )
+        slack_signature = req.headers["X-Slack-Signature"]
         if hmac.compare_digest(signature, slack_signature):
             return jsonify({"challenge": req.json["challenge"]})
 
 
-@app.route('/install')
+@flask.route("/install")
 def install():
     client_id = os.environ.get("SLACK_CLIENT_ID")
+    is_dev_mode = bool(os.environ.get("DEV"))
+    dev_redirect_uri = os.environ.get("DEV_SLACK_REDIRECT_URI")
     scopes = "channels:read,chat:write,channels:history,groups:history,im:history,mpim:history,emoji:read,users:read"
-    if bool(os.environ.get("DEV")) is True:
-        redirect_uri = os.environ.get("DEV_SLACK_REDIRECT_URI")
-    else:
-        # TODO: insert production redirect URI
-        redirect_uri = ""
-    slack_auth_url = f"https://slack.com/oauth/v2/authorize?client_id={client_id}&user_scope={scopes}&redirect_uri={redirect_uri}"
-    return redirect(slack_auth_url)
+    slack_auth_url = furl("https://slack.com/oauth/v2/authorize")
+    slack_auth_url.args["client_id"] = client_id
+    slack_auth_url.args["user_scope"] = scopes
+    slack_auth_url.args["redirect_uri"] = dev_redirect_uri if is_dev_mode else ""
+    return redirect(slack_auth_url.url)
 
 
-@app.route('/auth/callback')
+@flask.route("/auth/callback")
 def auth_callback():
-    code = request.args.get('code')
+    code = request.args.get("code")
     if code:
         client = WebClient()
         try:
@@ -88,9 +102,8 @@ def auth_callback():
                 client_id=os.environ.get("SLACK_CLIENT_ID"),
                 client_secret=os.environ.get("SLACK_CLIENT_SECRET"),
                 code=code,
-                redirect_uri=redirect_uri
+                redirect_uri=redirect_uri,
             )
-            print(response.get("authed_user").get("access_token"))
             # Store access token in session or a more persistent storage
             access_token = response.get("authed_user").get("access_token")
             keyring.set_password("slack_native", "access_token", access_token)
@@ -101,7 +114,7 @@ def auth_callback():
         return "No code provided by Slack.", 400
 
 
-@app.route("/events/listen", methods=["POST"])
+@flask.route("/events/listen", methods=["POST"])
 def listen():
     request_json = request.json
     if "challenge" in request_json:
@@ -111,13 +124,14 @@ def listen():
         if event["type"] == "message":
             # new message received, update the UI
             messages[event["channel"]].append(event["text"])
-            print(messages)
-            this.messages_manager.messages_updated_signal.emit(event["channel"], messages[event["channel"]])
+            this.messages_manager.messages_updated_signal.emit(
+                event["channel"], messages[event["channel"]]
+            )
 
     return "Request received."
 
 
-@app.route("/ipc", methods=["POST"])
+@flask.route("/ipc", methods=["POST"])
 def ipc():
     body = request.json
     action: dict = body.get("action")

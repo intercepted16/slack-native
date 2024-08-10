@@ -5,13 +5,18 @@ from PySide6.QtWidgets import QSplitter
 from PySide6.QtWidgets import QWidget, QHBoxLayout
 from slack_sdk.web import WebClient
 
-from ui.widgets.channels import ChannelsList
+from .channels import ChannelsList
 
 
 class MessagesPage(QWidget):
     channel_widgets: dict = {}
 
-    def __init__(self, slack_client: WebClient, messages_updated_signal, channels: List[dict] = None):
+    def __init__(
+        self,
+        slack_client: WebClient,
+        messages_updated_signal,
+        channels: List[dict] = None,
+    ):
         super().__init__()
         self.messages_updated_signal = messages_updated_signal
         self.slack_client = slack_client
@@ -29,7 +34,9 @@ class MessagesPage(QWidget):
         splitter = QSplitter(Qt.Orientation.Horizontal)
         main_layout.addWidget(splitter)
 
-        channels = ChannelsList(self.slack_client, channels, self.messages_updated_signal, self)
+        channels = ChannelsList(
+            self.slack_client, channels, self.messages_updated_signal, self
+        )
 
         for widget in channels.channel_widgets.values():
             splitter.addWidget(widget)
@@ -43,11 +50,3 @@ class MessagesPage(QWidget):
 
         if channels:
             channels.show_channel(channels.channels[0])
-        # add thread sidebar
-        # for now add test data here
-        # thread_sidebar = ThreadSidebar(
-        #     self.slack_client,
-        #     channels.channels[0],
-        #     await fetch_messages(self.slack_client, channels.channels[0]["id"]))
-        # await thread_sidebar.init()
-        # splitter.addWidget(thread_sidebar)

@@ -12,9 +12,7 @@ class RoundedImage(QImage):
             super().loadFromData(source_path)
         self.source_path: str | None = None
         self.radius = radius
-        self.image = super()
-        image = self.image
-        width, height = image.width(), image.height()
+        width, height = self.width(), self.height()
 
         # Create a mask image with rounded corners
         mask = QImage(width, height, QImage.Format.Format_Alpha8)
@@ -28,4 +26,4 @@ class RoundedImage(QImage):
         painter.end()
 
         # Apply the mask to the original image
-        image.setAlphaChannel(mask)
+        self.setAlphaChannel(mask)

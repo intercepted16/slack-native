@@ -1,18 +1,23 @@
-from functools import partial
 from typing import List
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
-from PySide6.QtWidgets import QListWidget, QListWidgetItem, QWidget, QVBoxLayout, QLabel, QScrollArea
+from PySide6.QtWidgets import QListWidget, QListWidgetItem, QWidget, QVBoxLayout, QLabel
+from slack_native.messages.fetch import fetch_messages
 from qt_async_threads import QtAsyncRunner
 from slack_sdk import WebClient
 
-from messages.fetch import fetch_messages
-from ui.widgets.messages_browser import MessagesBrowser
+from .messages_browser import MessagesBrowser
 
 
 class ChannelsList:
-    def __init__(self, slack_client: WebClient, channels: List[dict], messages_updated_signal, messages_page):
+    def __init__(
+        self,
+        slack_client: WebClient,
+        channels: List[dict],
+        messages_updated_signal,
+        messages_page,
+    ):
         self.channel_widgets = {}
         self.selected_channel = None
         self.channels = channels
@@ -44,28 +49,28 @@ class ChannelsList:
                 channel_widgets[channel["id"]] = widget
 
         runner = QtAsyncRunner()
+        # noinspection PyShadowingNames item
         channels_list_widget.itemPressed.connect(
-            lambda item: runner.to_sync(self.on_channel_selected)(item))
-        for channel_id, widget in channel_widgets.items():
+            lambda item: runner.to_sync(self.on_channel_selected)(item)
+        )
+        for widget in channel_widgets.values():
             widget.setVisible(False)
 
     async def on_channel_selected(self, item: QListWidgetItem):
         channel = item.data(Qt.ItemDataRole.UserRole)
-        print(f"Channel selected: {channel['name']}")
 
         if self.selected_channel == channel["id"]:
-            print("Channel already selected")
             return
 
         self.show_channel(channel)
 
         channel_messages = await fetch_messages(self.slack_client, channel["id"])
-        print(f"Channel messages: {channel_messages}")
-        self.messages_updated_signal.messages_updated.emit(self.messages_page, channel, channel_messages)
+        self.messages_updated_signal.messages_updated.emit(
+            self.messages_page, channel, channel_messages
+        )
 
     def show_channel(self, channel: dict):
         channel_widgets = self.channel_widgets
-        print("channel_widgets", channel_widgets)
         # Hide the previously selected channel's messages widget
         if channel_widgets:
             if self.selected_channel in channel_widgets:

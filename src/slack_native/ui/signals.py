@@ -5,15 +5,18 @@ from PySide6.QtWidgets import QWidget, QScrollArea
 from qt_async_threads import QtAsyncRunner
 from slack_sdk.web import WebClient
 
-from messages.render import render_messages
-from ui.widgets.messages_page import MessagesPage
+from slack_native.messages.render import render_messages
+from slack_native.widgets import MessagesPage
+
 
 class ShowWindowSignal(QObject):
     show_window = Signal()
 
 
 class MessagesUpdatedSignal(QObject):
-    messages_updated = Signal(MessagesPage, dict, list)  # Signal carrying a list of messages
+    messages_updated = Signal(
+        MessagesPage, dict, list
+    )  # Signal carrying a list of messages
     messages_frame: QWidget = None
     channel_widgets: dict = {}
     selected_channel: str = None
@@ -25,14 +28,16 @@ class MessagesUpdatedSignal(QObject):
         self.runner = runner
         self.messages_updated.connect(runner.to_sync(self.update_messages_ui))
 
-    async def update_messages_ui(self, messages_page: MessagesPage, channel: dict, channel_messages: List[dict]):
+    @staticmethod
+    async def update_messages_ui(
+        messages_page: MessagesPage, channel: dict, channel_messages: List[dict]
+    ):
         channel_id = channel["id"]
         channel_widgets = messages_page.channel_widgets
-        print(f"Channel widgets: {channel_widgets}")
         message_widget: QWidget = channel_widgets[channel_id]
-        message_scroll_area: QScrollArea = message_widget.findChild(QScrollArea)
+        message_scroll_area = message_widget.findChild(QScrollArea)
+        if not isinstance(message_scroll_area, QScrollArea):
+            return
         # Log the channel update
-        print(f"Updating messages for channel {channel_id}")
-        print(channel_messages)
 
         await render_messages(message_scroll_area, channel_messages)

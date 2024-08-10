@@ -19,4 +19,7 @@ class Tray(QSystemTrayIcon):
         self.setContextMenu(menu)
         # if single click, show the window
         self.activated.connect(
-            lambda reason: window.show() if reason == QSystemTrayIcon.ActivationReason.Trigger else None)
+            lambda reason: window.show()
+            if reason == QSystemTrayIcon.ActivationReason.Trigger
+            else None
+        )

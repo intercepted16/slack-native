@@ -9,15 +9,11 @@ lazy_loaded = {}
 
 
 # make a decorator to run when a button is clicked
-async def on_button_click(contentStack: QStackedWidget, i, func: callable):
-    # Print debug information about current widget and index
-    print(f"Index: {i}")
-    widget = contentStack.widget(i)
-    print(f"Widget at index {i}: {widget}")
+async def on_button_click(content_stack: QStackedWidget, i, func: callable):
+    widget = content_stack.widget(i)
 
     if lazy_loaded.get(i):
-        print("Widget already loaded")
-        contentStack.setCurrentIndex(i)
+        content_stack.setCurrentIndex(i)
         return
 
     lazy_loaded[i] = True
@@ -29,25 +25,18 @@ async def on_button_click(contentStack: QStackedWidget, i, func: callable):
         else:
             func(widget)
     else:
-        print("No function to run")
+        pass
 
-    # Print debug information before inserting the widget
-    print(f"Inserting widget at index {i}")
-    print(f"Widget to insert: {widget}")
-    index = contentStack.insertWidget(i, widget)
-    print(f"Inserted widget at index {index}")
-    contentStack.setCurrentIndex(i)
-
-    # Print all widgets in contentStack for verification
-    print("Current widgets in contentStack:")
-    for index in range(contentStack.count()):
-        print(f"Index {index}: {contentStack.widget(index)}")
+    content_stack.insertWidget(i, widget)
+    content_stack.setCurrentIndex(i)
 
 
 class SideBar(QWidget):
     contentStack = None
 
-    def __init__(self, buttons: List[tuple[QPushButton, callable, Union[callable, None]]]):
+    def __init__(
+        self, buttons: List[tuple[QPushButton, callable, Union[callable, None]]]
+    ):
         super().__init__()
         self.layout = QVBoxLayout()
         self.buttons = buttons
@@ -59,7 +48,10 @@ class SideBar(QWidget):
             self.contentStack.insertWidget(i, widget_resolver())
             self.layout.addWidget(button)
             button.clicked.connect(
-                partial(self.runner.to_sync(on_button_click), self.contentStack, i, func))
+                partial(
+                    self.runner.to_sync(on_button_click), self.contentStack, i, func
+                )
+            )
 
         self.layout.addStretch(1)
         self.setLayout(self.layout)

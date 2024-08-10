@@ -13,13 +13,15 @@ dependencies = [
     "PySide6",
     "darkdetect",
     "qt_async_threads",
-    "emoji_data_python",
+    "emoji-data-python>=1.6.0",
     "xxhash",
     "httpretty",
     "names",
     "pillow",
     "slack_sdk",
     "mlack @ git+https://github.com/intercepted16/mlack.git",
+    "pyinstaller>=6.9.0",
+    "furl>=2.1.3",
 ]
 readme = "README.md"
 requires-python = ">= 3.8"
@@ -37,3 +39,7 @@ allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/slack_native"]
+
+[tool.ruff.lint]
+# warn about print statements in production code
+extend-select = ["T201"]
